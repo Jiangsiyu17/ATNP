@@ -1,0 +1,183 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Compound List{% endblock %}
+
+{% block content %}
+<div style="-webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 20px;
+            line-height: 1.428571429;
+            color: #333333;
+            box-sizing: border-box;
+            padding-bottom: 9px;
+            margin: 40px 0 20px;
+            border-bottom: 2px solid #eeeeee;">
+    Compounds
+</div>
+
+<!-- 分页信息和导航 -->
+<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+    <div class="page_info">
+        Displaying <b>{{ page_obj.start_index }} - {{ page_obj.end_index }}</b> of <b>{{ page_obj.paginator.count }}</b>
+        in total
+    </div>
+    <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
+        </li>
+        {% endif %}
+
+        {% if page_obj.number > 3 %}
+        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
+        {% if page_obj.number > 4 %}
+        <li class="page-item disabled"><a class="page-link" href="#" onclick="return false;">…</a></li>
+        {% endif %}
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+        {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %} <li
+            class="page-item {% if num == page_obj.number %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.number < page_obj.paginator.num_pages|add:"-2" %} 
+                {% if page_obj.number < page_obj.paginator.num_pages|add:"-3" %} 
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" onclick="return false;">…</a>
+                    </li>
+                {% endif %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                        {{page_obj.paginator.num_pages }}
+                    </a>
+                </li>
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
+                </li>
+                {% endif %}
+    </ul>
+</div>
+
+<div class="container-fluid mt-4">
+    {% if no_result %}
+    <p class="text-danger">无内容</p>
+    {% endif %}
+
+    <form method="get" action="{% url 'compound_list' %}">
+        <table class="table w-100 table-striped table-bordered table-hover">
+            <thead>
+                <tr>
+                    <th style="min-width: 120px;">#</th>
+                    <th style="min-width: 180px;">Compound name</th>
+                    <th style="min-width: 160px;">Precursor M/Z</th>
+                    <th style="min-width: 160px;">Database</th>
+                    <th style="min-width: 200px;">Smiles</th>
+                    <th style="min-width: 160px;"></th>
+                </tr>
+                <!-- <tr>
+                    <th></th>
+                    <th>
+                        <input type="text" class="form-control form-control-sm" name="query" value="{{ query }}"
+                            placeholder="Search..." />
+                        <input type="hidden" name="field" value="{{ field }}" />
+                    </th>
+                    <th>
+                        <input type="text" class="form-control form-control-sm" name="query"
+                            placeholder="Search..." />
+                        <input type="hidden" name="field" value="PRECURSOR_MZ" />
+                    </th>
+                    <th>
+                        <input type="text" class="form-control form-control-sm" name="query"
+                            placeholder="Search..." />
+                        <input type="hidden" name="field" value="DATABASE" />
+                    </th>
+                    <th>
+                        <input type="text" class="form-control form-control-sm" name="query"
+                            placeholder="Search..." />
+                        <input type="hidden" name="field" value="smiles" />
+                    </th>
+                    <th class="d-flex gap-1">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <a href="{% url 'compound_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                    </th>
+                </tr> -->
+            </thead>
+            <tbody>
+                {% for compound in compounds %}
+                <tr>
+                    <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
+                    <td><a href="{% url 'compound_detail' compound.first_id %}" class="text-decoration-none">
+                        {{compound.standard }}</a>
+                    </td>
+                    <td>{{ compound.precursor_mz }}</td>
+                    <td>{{ compound.database }}</td>
+                    <td style="font-family: monospace; font-size: 0.85em;">{{ compound.smiles }}</td>
+                    <td><a href="{% url 'compound_detail' compound.first_id %}" class="btn btn-sm btn-outline-primary">View</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
+</div>
+
+<!-- 分页信息和导航 -->
+<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+    <div class="page_info">
+        Displaying <b>{{ page_obj.start_index }} - {{ page_obj.end_index }}</b> of <b>{{ page_obj.paginator.count }}</b>
+        in total
+    </div>
+    <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
+        </li>
+        {% endif %}
+
+        {% if page_obj.number > 3 %}
+        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
+        {% if page_obj.number > 4 %}
+        <li class="page-item disabled"><a class="page-link" href="#" onclick="return false;">…</a></li>
+        {% endif %}
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+        {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %} 
+            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.number < page_obj.paginator.num_pages|add:"-2" %} 
+                {% if page_obj.number < page_obj.paginator.num_pages|add:"-3" %} 
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" onclick="return false;">…</a>
+                    </li>
+                {% endif %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                        {{page_obj.paginator.num_pages }}
+                    </a>
+                </li>
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
+                </li>
+                {% endif %}
+    </ul>
+</div>
+<hr>
+
+{% endblock %}

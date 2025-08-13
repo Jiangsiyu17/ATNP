@@ -1,0 +1,77 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}{{ compound }} – {{ latin_name }}{% endblock %}
+
+{% block content %}
+<style>
+  th {
+    white-space: nowrap !important;
+    width: 1% !important;
+    min-width: 140px !important;
+  }
+  .custom-header {
+    background-color: rgb(64, 158, 255) !important;
+    color: white !important;
+  }
+</style>
+
+<div class="container-fluid mt-4">
+  <!-- 顶部标题 + 返回按钮 -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ compound }}</h2>
+
+    {% with first_entry=entries.first %}
+      {% if first_entry %}
+        <a href="{% url 'compound_detail' pk=first_entry.id %}" class="btn btn-secondary btn-sm">Back to Compound</a>
+      {% else %}
+        <a href="#" class="btn btn-secondary btn-sm disabled" tabindex="-1" aria-disabled="true">Back to Compound</a>
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  {% if entries %}
+    {% for e in entries %}
+      <table class="table w-100 table-bordered table-hover mb-4">
+        <tbody>
+          <tr class="custom-header">
+            <th class="divider" colspan="2">Herb Information</th>
+          </tr>
+          <tr>
+            <th>Chinese Name</th>
+            <td><strong>{{ e.chinese_name }}</strong></td>
+          </tr>
+          <tr>
+            <th>Latin Name</th>
+            <td>{{ e.latin_name }}</td>
+          </tr>
+          <tr>
+            <th>Tissue</th>
+            <td>{{ e.tissue }}</td>
+          </tr>
+          <tr>
+            <th>Match Score</th>
+            <td>{{ e.score|floatformat:4 }}</td>
+          </tr>
+          <tr>
+            <th>Spectrum comparison</th>
+            <td>
+              {% if e.id in matched_ids %}
+                {% for item in comparison_list %}
+                  {% if item.sample.id == e.id %}
+                    <img src="data:image/png;base64,{{ item.image }}" class="img-fluid" />
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">No spectrum</span>
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-warning">No herb compound entries found.</div>
+  {% endif %}
+</div>
+{% endblock %}

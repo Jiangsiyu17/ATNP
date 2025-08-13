@@ -1,0 +1,13 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Compound List{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  {% if no_result %}
+  <p class="text-danger">无内容</p>
+  {% endif %}
+  
+</div>
+{% endblock %}

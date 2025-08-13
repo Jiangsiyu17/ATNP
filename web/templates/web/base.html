@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}ATNP Database{% endblock %}</title>
+    {% load static %}
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'css/datatables.min.css' %}" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .custom-link {
+            color: black;
+            text-decoration: none;
+        }
+
+        .custom-link:hover {
+            text-decoration: underline;
+        }
+
+        .navbar {
+            background-color: rgb(64, 158, 255) !important;
+        }
+
+        .navbar .nav-link,
+        .navbar .navbar-brand,
+        .navbar .navbar-toggler-icon {
+            color: white !important;
+        }
+
+        .navbar .nav-link:hover {
+            color: #e0e0e0 !important;
+        }
+
+        .navbar-brand img {
+            height: 40px;
+        }
+
+        body {
+            background-color: white;
+        }
+
+        .table thead th {
+            vertical-align: middle;
+        }
+
+        .container {
+            margin-top: 20px;
+        }
+
+        .nav-item {
+            font-size: 14px;
+            line-height: 1.428571429;
+            color: rgb(64, 158, 255);
+        }
+
+        .search-icon {
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .search-bar .form-control,
+        .search-bar .form-select,
+        .search-bar .btn {
+            border-radius: 0;
+        }
+
+        .search-bar {
+            max-width: 600px;
+        }
+
+        .pagination-holder {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .page_info {
+            margin-right: 15px;
+        }
+
+        .btn-outline-success {
+            border-color: rgb(64, 158, 255);
+            color: rgb(64, 158, 255);
+        }
+
+        .btn-outline-success:hover {
+            background-color: rgb(64, 158, 255);
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'home' %}">ATNP</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'herb_list' %}">Herb List</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'compound_list' %}">Compound List</a></li>
+                </ul>
+
+                <!-- 搜索框 -->
+                <form class="d-flex align-items-center search-bar" action="{% url 'search' %}" method="get">
+                    <input class="form-control form-control-sm me-2" type="search" name="query" placeholder="Search">
+                    <select class="form-select form-select-sm me-2" name="category">
+                        <option value="herbs">herbs</option>
+                        <option value="compounds">compounds</option>
+                    </select>
+                    <button class="btn btn-outline-success btn-sm d-flex align-items-center" type="submit">
+                        <i class="bi bi-search search-icon"></i>
+                        <span>Search</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 页面内容块 -->
+    <div class="container-fluid px-4">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <!-- 分页等用的 JS -->
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/jquery.min.js' %}"></script>
+    <script src="{% static 'js/datatables.min.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            $('#data-table').DataTable();
+        });
+    </script>
+</body>
+
+</html>

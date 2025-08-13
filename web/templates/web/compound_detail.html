@@ -1,0 +1,142 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Compound detail{% endblock %}
+
+{% block content %}
+<style>
+  th {
+    white-space: nowrap !important;
+    width: 1% !important;
+    min-width: 140px !important;
+    padding-right: 50px !important;
+  }
+
+  /* 表头统一蓝色风格 */
+  .table-info > th,
+  .table-info > td,
+  thead.table-info > tr > th {
+    background-color: rgb(64, 158, 255) !important;
+    color: white !important;
+  }
+</style>
+
+<div>
+  <div style="-webkit-text-size-adjust: 100%;
+              -webkit-tap-highlight-color: transparent;
+              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+              font-size: 20px;
+              line-height: 1.428571429;
+              color: #333333;
+              box-sizing: border-box;
+              padding-bottom: 10px;
+              margin: 40px 0 20px;
+              border-bottom: 2px solid #eeeeee;">
+      {{ compound.standard }}
+      <a href="/compound/list/" class="btn btn-primary btn-sm">Back</a>
+  </div>
+</div>
+
+<!-- Content -->
+<div class="container-fluid mt-4">
+  <table class="table w-100 table-bordered table-hover">
+    <tbody>
+      <!-- General Information -->
+      <tr class="table-info">
+        <th class="divider" colspan="2">Compound Information</th>
+      </tr>
+      <tr>
+        <th>Compound name</th>
+        <td><strong>{{ compound.standard }}</strong></td>
+      </tr>
+      <tr>
+        <th>SMILES</th>
+        <td>{{ compound.smiles }}</td>
+      </tr>
+      <tr>
+        <th>Ion Mode</th>
+        <td>{{ compound.ionmode }}</td>
+      </tr>
+      <tr>
+        <th>Database source</th>
+        <td>{{ compound.database }}</td>
+      </tr>
+      <tr>
+        <th>RT in Seconds</th>
+        <td>{{ compound.rtinseconds }}</td>
+      </tr>
+      <tr>
+        <th>PEPMASS</th>
+        <td>{{ compound.pepmass|floatformat:4 }}</td>
+      </tr>
+      <tr>
+        <th>Structure</th>
+        <td>
+          {% if mol_img %}
+          <img src="data:image/png;base64,{{ mol_img }}" class="img-thumbnail" />
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  {# ---------- Herb Sources ------------- #}
+  <h3 class="mt-5">Herb Sources</h3>
+  <table class="table w-100 table-bordered table-hover">
+    <thead class="table-info">
+      <tr>
+        <th>Chinese Name</th>
+        <th>Latin Name</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ps in plant_sources %}
+        <tr>
+            <td>
+              <a class="text-decoration-none" href="{% url 'herb_compound_detail' latin_name=ps.latin_slug|urlencode compound=ps.compound_raw|urlencode %}">
+                {{ ps.chinese_name }}
+              </a>
+            </td>
+            <td>
+              <a class="text-decoration-none" href="{% url 'herb_compound_detail' latin_name=ps.latin_slug|urlencode compound=ps.compound_raw|urlencode %}">
+                {{ ps.latin_name }}
+              </a>
+            </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="2" class="text-muted">No herb recorded for this compound.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if similar_samples %}
+  <h3 class="mt-5">Plants Containing Similar Compounds</h3>
+  <table class="table w-100 table-bordered table-hover mb-5">
+    <thead class="table-info">
+      <tr>
+        <th>Latin Name</th>
+        <th>Chinese Name</th>
+        <th>Tissue</th>
+        <th>Similarity Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in similar_samples %}
+        <tr>
+          <td>{{ item.latin_name }}</td>
+          <td>{{ item.chinese_name }}</td>
+          <td>{{ item.tissue }}</td>
+          <td>{{ item.score }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+
+<script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+<hr>
+{% endblock %}
