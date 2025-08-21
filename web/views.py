@@ -13,6 +13,11 @@ from collections import defaultdict
 import unicodedata
 from web.utils.plot_tools import plot_ref_mol
 import hashlib
+from web.utils.identify import identify_spectrums
+import tempfile
+from matchms.exporting import save_as_mgf
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _fallback_mz(pepmass):
@@ -214,122 +219,97 @@ def search(request):
         return redirect(f'/compound/list?query={query}')
 
 
-def build_matchms_spectrum(peaks, metadata=None):
-    import numpy as np
-    from matchms import Spectrum
-    if not peaks:
-        return None
-    if isinstance(peaks[0], dict):
-        mz = np.array([float(p['mz']) for p in peaks], dtype=float)  # 改这里
-        intensities = np.array([float(p['int']) for p in peaks], dtype=float)  # 改这里
-    else:
-        mz, intensities = zip(*peaks)
-        mz = np.array(mz, dtype=float)  # 改这里
-        intensities = np.array(intensities, dtype=float)  # 改这里
-    print(f"mz dtype: {mz.dtype}, intensities dtype: {intensities.dtype}")
-    return Spectrum(mz=mz, intensities=intensities, metadata=metadata or {})
-
-
-def get_similar_sample_sources(compound, top_k=50):
-    import pickle, hnswlib, json
-    import numpy as np
-    from gensim.models import KeyedVectors
-    from spec2vec import SpectrumDocument
-    from spec2vec.vector_operations import calc_vector
-    from matchms.filtering import normalize_intensities
-    from web.models import CompoundLibrary
-    from django.conf import settings
-    import os
-
-    MODEL_DIR = os.path.join(settings.BASE_DIR, "model")
-    POS_MODEL_PATH = os.path.join(MODEL_DIR, "Ms2Vec_allGNPSpositive.hdf5")
-    NEG_MODEL_PATH = os.path.join(MODEL_DIR, "Ms2Vec_allGNPSnegative.hdf5")
-    POS_INDEX_PATH = os.path.join(MODEL_DIR, "herbs_index_pos.bin")
-    NEG_INDEX_PATH = os.path.join(MODEL_DIR, "herbs_index_neg.bin")
-    POS_SPEC_PATH = os.path.join(MODEL_DIR, "herbs_spectra_pos.pickle")
-    NEG_SPEC_PATH = os.path.join(MODEL_DIR, "herbs_spectra_neg.pickle")
-    
-    ionmode = (compound.ionmode or "positive").lower()
-    if ionmode == "negative":
-        model_path = NEG_MODEL_PATH
-        index_path = NEG_INDEX_PATH
-        spec_path = NEG_SPEC_PATH
-    else:
-        model_path = POS_MODEL_PATH
-        index_path = POS_INDEX_PATH
-        spec_path = POS_SPEC_PATH
-
-    try:
-        model = KeyedVectors.load(model_path)
-        with open(spec_path, "rb") as f:
-            sample_spectra = pickle.load(f)
-        index = hnswlib.Index(space='l2', dim=300)
-        index.load_index(index_path)
-        index.set_ef(200)
-    except Exception as e:
-        print(f"[ERROR] 加载模型失败: {e}")
-        return []
-
-    peaks = compound.peaks
-    if isinstance(peaks, str):
-        peaks = json.loads(peaks)
-
-    spectrum = build_matchms_spectrum(peaks, metadata={"compound_name": compound.standard})
-    spectrum = normalize_intensities(spectrum)
-    query_vec = calc_vector(model, SpectrumDocument(spectrum, n_decimals=2), allowed_missing_percentage=100)
-    if query_vec is None:
-        return []
-
-    query_vec /= np.linalg.norm(query_vec)
-
-    idx, distances = index.knn_query(query_vec, k=top_k)
-    similar_samples = []
-    for i, d in zip(idx[0], distances[0]):
-        score = 1 - d / 4.0  # spec2vec 距离转为相似度
-        metadata = sample_spectra[i].metadata
-        similar_samples.append({
-            "latin_name": metadata.get("latin_name"),
-            "chinese_name": metadata.get("chinese_name"),
-            "tissue": metadata.get("tissue"),
-            "score": round(score, 4),
-        })
-    return similar_samples
-
 def compound_detail(request, pk):
+    import logging
+    from django.shortcuts import render, get_object_or_404
+    from django.utils.text import slugify
+    from django.core.cache import cache
+    from .models import CompoundLibrary
+    from .utils.plotting import plot_ref_mol
+    from .utils.identify import identify_spectrums
+    from matchms import Spectrum
+    import numpy as np
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"→ Enter compound_detail, pk={pk}")
+
+    # 获取化合物对象
     compound = get_object_or_404(CompoundLibrary, pk=pk)
     mol_img = plot_ref_mol(compound.smiles) if compound.smiles else None
 
-    # 查询草药来源信息
-    plant_sources_raw = (
-        CompoundLibrary.objects
-        .filter(standard=compound.standard)
-        .exclude(latin_name__isnull=True)
-        .exclude(latin_name__exact='')
-        .values("chinese_name", "latin_name")
-        .distinct()
-        .order_by("latin_name")
-    )
+    # ===== 表格 A：数据库来源 =====
+    qs = CompoundLibrary.objects.filter(
+        standard=compound.standard
+    ).exclude(latin_name__isnull=True).exclude(latin_name__exact='').distinct()
+
     plant_sources = [
         {
-            "chinese_name": ps["chinese_name"],
-            "latin_name": ps["latin_name"],
-            "latin_slug": slugify(ps["latin_name"]),
+            "chinese_name": item.chinese_name,
+            "latin_name": item.latin_name,
+            "latin_slug": slugify(item.latin_name),
             "compound_raw": compound.standard,
         }
-        for ps in plant_sources_raw
+        for item in qs
     ]
+    logger.info(f"→ Plant_sources count: {len(plant_sources)}")
 
-    # 获取与该化合物谱图相似的植物样本（sample库）
-    similar_samples = get_similar_sample_sources(compound)
+    # ===== 表格 B：谱图相似来源 =====
+    cache_key = f"compound_identify_{compound.id}"
+    # 临时禁用缓存调试
+    results = None
+    # results = cache.get(cache_key)
+    logger.info(f"→ Cache hit: {results is not None}")
 
+    if results is None:
+        spectrum = compound.get_spectrum()
+        similar_samples = []
+        if spectrum:
+            logger.info(f"✔ Got spectrum, peaks count: {len(spectrum.peaks)}")
+
+            # ----- 归一化峰强度 -----
+            intensities = spectrum.intensities
+            if intensities.max() > 0:
+                intensities = intensities / intensities.max()
+            spectrum = Spectrum(mz=spectrum.mz, intensities=intensities, metadata=spectrum.metadata)
+
+            # 调用 identify_spectrums 获取实际匹配结果
+            raw_results = identify_spectrums([spectrum])
+
+            logger.info(f"✔ identify_spectrums returned {len(raw_results)} results")
+
+            # 构建 similar_samples，只取前50个
+            for r in raw_results[:50]:
+                similar_samples.append({
+                    "latin_name": r.get("latin_name"),
+                    "chinese_name": r.get("chinese_name"),
+                    "tissue": r.get("tissue"),
+                    "score": r.get("score"),
+                    "latin_slug": slugify(r.get("latin_name") or "")
+                })
+        else:
+            logger.warning("⚠ No spectrum found for this compound")
+            similar_samples = []
+    else:
+        similar_samples = results[:50]
+
+    logger.info(f"✔ Similar_samples count: {len(similar_samples)}")
+
+    # ===== 模板上下文 =====
     context = {
         "compound": compound,
         "mol_img": mol_img,
-        "plant_sources": plant_sources,
-        "similar_samples": similar_samples,  # 新增相似植物样本列表
+        "plant_sources": plant_sources,        # 表格 A
+        "similar_samples": similar_samples,    # 表格 B
+        "debug_info": {                        # 调试信息
+            "plant_sources_count": len(plant_sources),
+            "similar_samples_count": len(similar_samples),
+            "spectrum_exists": bool(compound.get_spectrum())
+        }
     }
 
     return render(request, "web/compound_detail.html", context)
+
+
 
 
 def make_cache_key(prefix, latin_name, compound):

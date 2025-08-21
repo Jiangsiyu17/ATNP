@@ -1,93 +1,97 @@
+# web/utils/identify.py
+
+import logging
 import pickle
 import numpy as np
 from gensim.models import Word2Vec
 from hnswlib import Index
-from matchms.importing import load_from_mgf
-from matchms import Spectrum
+from spec2vec import SpectrumDocument
+from spec2vec.vector_operations import calc_vector
+from web.models import CompoundLibrary
 
-def find_most_similar_spectrum(s, p, model, references):
-    intensities = s.intensities
-    if intensities.max() > 1:
-        intensities = intensities / intensities.max()
+logger = logging.getLogger(__name__)
+logger.info("identify.py loaded")
 
-    s_norm = Spectrum(mz=s.mz, intensities=intensities, metadata=s.metadata)
+# ---------- 全局模型路径 ----------
+MODEL_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5"
+MODEL_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5"
+REFS_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_1000.pickle"
+REFS_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_1000.pickle"
+HNSW_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_1000.bin"
+HNSW_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_1000.bin"
 
-    from spec2vec import SpectrumDocument
-    from spec2vec.vector_operations import calc_vector
+VECTOR_DIM = 300
 
-    query_vector = calc_vector(model, SpectrumDocument(s_norm, n_decimals=2), allowed_missing_percentage=100)
-    xq = np.array(query_vector).astype('float32')
+# ---------- 全局缓存 ----------
+_models = {}
+_indexes = {}
+_refs = {}
+
+def load_models_and_indexes():
+    """懒加载模型、索引和谱图"""
+    global _models, _indexes, _refs
+
+    if "pos" not in _models:
+        logger.info("Loading POS model and index...")
+        _models["pos"] = Word2Vec.load(MODEL_POS_PATH)
+        _indexes["pos"] = Index(space="l2", dim=VECTOR_DIM)
+        _indexes["pos"].load_index(HNSW_POS_PATH)
+        _indexes["pos"].set_ef(300)
+        with open(REFS_POS_PATH, "rb") as f:
+            _refs["pos"] = pickle.load(f)
+
+    if "neg" not in _models:
+        logger.info("Loading NEG model and index...")
+        _models["neg"] = Word2Vec.load(MODEL_NEG_PATH)
+        _indexes["neg"] = Index(space="l2", dim=VECTOR_DIM)
+        _indexes["neg"].load_index(HNSW_NEG_PATH)
+        _indexes["neg"].set_ef(300)
+        with open(REFS_NEG_PATH, "rb") as f:
+            _refs["neg"] = pickle.load(f)
+
+def find_most_similar_spectrum(spectrum, ionmode="positive", top_k=50):
+    """
+    spectrum: matchms.Spectrum 对象
+    ionmode: 'positive' 或 'negative'
+    返回 top_k 个相似谱图信息，包括 Latin Name, Chinese Name, Tissue, Score
+    """
+    load_models_and_indexes()
+
+    mode = "neg" if ionmode.lower() == "negative" else "pos"
+    model = _models[mode]
+    hnsw = _indexes[mode]
+    references = _refs[mode]
+
+    # 构建 SpectrumDocument 并计算向量
+    sdoc = SpectrumDocument(spectrum, n_decimals=2)
+    vec = calc_vector(model, sdoc, allowed_missing_percentage=100)
+    xq = np.array(vec, dtype="float32")
     xq /= np.linalg.norm(xq)
 
-    idx, distance = p.knn_query(xq, 1)
-    norm_distance = round(distance[0, 0] / 4.0, 2)
-
-    score = 1.0 - norm_distance
-    score = round(score, 2)
-    ref_spec = np.array(references)[idx[0, 0]]
-    ref_spec_index = ref_spec.metadata.get("database_index")
-    return ref_spec, score, ref_spec_index
-
-def id_spectrum_list(spectrum_list,
-                     hnsw_pos, model_pos, refs_pos,
-                     hnsw_neg, model_neg, refs_neg,
-                     progress=None):
-    res = []
-    for s in spectrum_list:
-        sn = None
-        if "ionmode" in s.metadata.keys():
-            if s.metadata["ionmode"] == "negative":
-                sn = find_most_similar_spectrum(s, hnsw_neg, model_neg, refs_neg)
-            else:
-                sn = find_most_similar_spectrum(s, hnsw_pos, model_pos, refs_pos)
-        else:
-            sn = find_most_similar_spectrum(s, hnsw_pos, model_pos, refs_pos)
-        res.append(sn)
-    print("hhhres")
-    return res
-
-def identify_batch(file_path):
-    # 先加载模型和索引（最好启动时全局加载，提高效率）
-    MODEL_POS_PATH = '/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5'
-    MODEL_NEG_PATH = '/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5'
-    model_pos = Word2Vec.load(MODEL_POS_PATH)
-    model_neg = Word2Vec.load(MODEL_NEG_PATH)
-
-    with open("/data2/jiangsiyu/ATNP_Database/model/references_spectrums_positive.pickle", "rb") as f:
-        refs_pos = pickle.load(f)
-    with open("/data2/jiangsiyu/ATNP_Database/model/references_spectrums_negative.pickle", "rb") as f:
-        refs_neg = pickle.load(f)
-
-    hnsw_pos = Index(space="l2", dim=300)
-    hnsw_pos.load_index("/data2/jiangsiyu/ATNP_Database/model/references_index_positive_spec2vec.bin")
-    hnsw_pos.set_ef(300)
-    hnsw_neg = Index(space="l2", dim=300)
-    hnsw_neg.load_index("/data2/jiangsiyu/ATNP_Database/model/references_index_negative_spec2vec.bin")
-    hnsw_neg.set_ef(300)
-
-    spectrums = list(load_from_mgf(file_path))
-    print(f"✔ 加载上传谱图数：{len(spectrums)}")
-    for i, s in enumerate(spectrums):
-        print(f"  Spectrum {i}: title={s.get('title')}, ionmode={s.get('ionmode')}, num_peaks={len(s.peaks)}")
-
-    raw_results = id_spectrum_list(spectrums, hnsw_pos, model_pos, refs_pos, hnsw_neg, model_neg, refs_neg)
-
-    from web.models import CompoundLibrary
+    idxs, distances = hnsw.knn_query(xq, k=min(top_k, len(references)))
 
     results = []
-    for query_spec, (ref_spec, score, ref_idx) in zip(spectrums, raw_results):
-        compound_obj = None
-        if ref_spec:
-            std_name = ref_spec.get("standard") or ref_spec.get("name")
-            if std_name:
-                compound_obj = CompoundLibrary.objects.filter(standard__iexact=std_name).first()
+    for idx, dist in zip(idxs[0], distances[0]):
+        score = round(1.0 - dist / 4.0, 4)
+        if score <= 0:
+            continue
+        ref_spec = references[idx]
 
+        # 直接从 ref_spec.metadata 取值
         results.append({
-            "query_title": query_spec.metadata.get("title", "Unknown"),
+            "latin_name": ref_spec.metadata.get("latin_name"),
+            "chinese_name": ref_spec.metadata.get("chinese_name"),
+            "tissue": ref_spec.metadata.get("tissue"),
             "score": score,
-            "compound_id": compound_obj.id if compound_obj else None,
-            "ref_index": ref_idx,
         })
 
-    print(f"identify_batch returned {len(results)} results")
-    return results
+    return results[:top_k]
+
+def identify_spectrums(spectrums):
+    """批量鉴定谱图列表"""
+    all_results = []
+    for s in spectrums:
+        ionmode = s.metadata.get("ionmode", "positive")
+        res = find_most_similar_spectrum(s, ionmode=ionmode, top_k=50)
+        all_results.extend(res)
+    return all_results
