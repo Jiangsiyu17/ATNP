@@ -4,7 +4,7 @@ from .models import CompoundLibrary
 from django.db.models.functions import Lower
 from django.db.models import Q 
 from django.core.paginator import Paginator
-from web.utils.plotting import plot_ref_mol, generate_spectrum_comparison
+from web.utils.plotting import plot_ref_mol, generate_spectrum_comparison, format_latin_name
 import re
 import itertools
 from urllib.parse import unquote
@@ -14,10 +14,14 @@ import unicodedata
 from web.utils.plot_tools import plot_ref_mol
 import hashlib
 from web.utils.identify import identify_spectrums
-import tempfile
+from urllib.parse import quote
 from matchms.exporting import save_as_mgf
 import logging
 logger = logging.getLogger(__name__)
+from django.urls import reverse
+import logging
+from matchms import Spectrum
+import numpy as np
 
 
 def _fallback_mz(pepmass):
@@ -143,7 +147,7 @@ def herb_list(request):
         tissues    = sorted({g["tissue"] for g in group_list if g["tissue"]})
         rows.append({
             "latin_lower": latin,                        # ★ 模板用来反向解析
-            "latin_name":  first["latin_name"],          # 备用，如需展示
+            "latin_name":  format_latin_name(first["latin_name"]),          # 备用，如需展示
             "chinese_name": first["chinese_name"],
             "tissue":      ", ".join(tissues) or "-",    # ★ 模板列名保持一致
         })
@@ -193,7 +197,7 @@ def herb_detail(request, latin_name):
         "standard": r["standard"],
         "first_id": r["first_id"],
         "precursor_mz": f"{r['precursor_mz']:.4f}" if r["precursor_mz"] else "-",
-        "database": ", ".join(sorted(r["databases"])) or "-",
+        "database": ", ".join(sorted(r["databases"])).upper() or "-",
         "smiles": r["smiles"],
         "pepmass": r["pepmass"],  # 添加 pepmass 字段
     } for r in rows_dict.values()]
@@ -202,7 +206,7 @@ def herb_detail(request, latin_name):
 
     # 确保传递给模板的数据没有问题
     return render(request, 'web/herb_detail.html', {
-        'latin_name': latin_name,
+        'latin_name': format_latin_name(latin_name),
         'compounds': rows,
     })
 
@@ -210,26 +214,32 @@ def home(request):
     return render(request, 'web/home.html')
 
 def search(request):
-    query = request.GET.get('query', '')
-    category = request.GET.get('category', 'compounds')
+    query = request.GET.get("q", "").strip()
 
-    if category == 'herbs':
-        return redirect(f'/herbs/?query={query}&field=latin_name')
-    else:
-        return redirect(f'/compound/list?query={query}')
+    if not query:
+        return render(request, "search_not_found.html", {"query": query})
+
+    # 1. 搜化合物（用 standard/title/smiles）
+    compound = (CompoundLibrary.objects.filter(standard__icontains=query).first() or
+                CompoundLibrary.objects.filter(title__icontains=query).first() or
+                CompoundLibrary.objects.filter(smiles__icontains=query).first())
+
+    if compound:
+        return redirect(reverse("compound_detail", args=[compound.pk]))
+
+    # 2. 搜植物（用 latin_name 或 chinese_name）
+    herb = (CompoundLibrary.objects.filter(latin_name__icontains=query).first() or
+            CompoundLibrary.objects.filter(chinese_name__icontains=query).first())
+
+    if herb:
+        # 注意：这里跳转 herb_detail，用 latin_name 作为参数
+        return redirect(reverse("herb_detail", args=[herb.latin_name]))
+
+    # 3. 都没找到
+    return render(request, "search_not_found.html", {"query": query})
 
 
 def compound_detail(request, pk):
-    import logging
-    from django.shortcuts import render, get_object_or_404
-    from django.utils.text import slugify
-    from django.core.cache import cache
-    from .models import CompoundLibrary
-    from .utils.plotting import plot_ref_mol
-    from .utils.identify import identify_spectrums
-    from matchms import Spectrum
-    import numpy as np
-
     logger = logging.getLogger(__name__)
     logger.info(f"→ Enter compound_detail, pk={pk}")
 
@@ -242,55 +252,84 @@ def compound_detail(request, pk):
         standard=compound.standard
     ).exclude(latin_name__isnull=True).exclude(latin_name__exact='').distinct()
 
-    plant_sources = [
-        {
+    plant_sources = []
+    for item in qs:
+        # 生成安全 URL
+        compound_url = quote(compound.standard, safe='')  # 对特殊字符（包括 / + - 等）做编码
+        plant_sources.append({
             "chinese_name": item.chinese_name,
-            "latin_name": item.latin_name,
+            "latin_name": format_latin_name(item.latin_name),
             "latin_slug": slugify(item.latin_name),
             "compound_raw": compound.standard,
-        }
-        for item in qs
-    ]
+            "compound_url": compound_url,
+        })
+
+    
+    # ✅ 去重：同一个中文名 + 拉丁名 只保留一条
+    plant_sources_dict = {}
+    for ps in plant_sources:
+        key = (ps["chinese_name"], ps["latin_name"])
+        if key not in plant_sources_dict:
+            plant_sources_dict[key] = ps
+    plant_sources = list(plant_sources_dict.values())
+
     logger.info(f"→ Plant_sources count: {len(plant_sources)}")
 
     # ===== 表格 B：谱图相似来源 =====
     cache_key = f"compound_identify_{compound.id}"
-    # 临时禁用缓存调试
     results = None
     # results = cache.get(cache_key)
     logger.info(f"→ Cache hit: {results is not None}")
 
-    if results is None:
-        spectrum = compound.get_spectrum()
-        similar_samples = []
-        if spectrum:
-            logger.info(f"✔ Got spectrum, peaks count: {len(spectrum.peaks)}")
+    similar_samples = []
 
-            # ----- 归一化峰强度 -----
-            intensities = spectrum.intensities
-            if intensities.max() > 0:
-                intensities = intensities / intensities.max()
-            spectrum = Spectrum(mz=spectrum.mz, intensities=intensities, metadata=spectrum.metadata)
+    spectrum = compound.get_spectrum()
+    if spectrum:
+        logger.info(f"✔ Got spectrum, peaks count: {len(spectrum.peaks)}")
 
-            # 调用 identify_spectrums 获取实际匹配结果
-            raw_results = identify_spectrums([spectrum])
+        # ----- 归一化峰强度 -----
+        intensities = spectrum.intensities
+        if intensities.max() > 0:
+            intensities = intensities / intensities.max()
+        spectrum = Spectrum(mz=spectrum.mz, intensities=intensities, metadata=spectrum.metadata)
 
-            logger.info(f"✔ identify_spectrums returned {len(raw_results)} results")
+        # 调用 identify_spectrums 获取实际匹配结果
+        raw_results = identify_spectrums([spectrum])
+        logger.info(f"✔ identify_spectrums returned {len(raw_results)} results")
 
-            # 构建 similar_samples，只取前50个
-            for r in raw_results[:50]:
-                similar_samples.append({
-                    "latin_name": r.get("latin_name"),
-                    "chinese_name": r.get("chinese_name"),
-                    "tissue": r.get("tissue"),
-                    "score": r.get("score"),
-                    "latin_slug": slugify(r.get("latin_name") or "")
-                })
-        else:
-            logger.warning("⚠ No spectrum found for this compound")
-            similar_samples = []
+        # 1️⃣ 过滤 score > 0.6
+        filtered_results = [r for r in raw_results if r.get("score", 0) > 0.6]
+
+        # 2️⃣ 去重：同一 latin_name + tissue + precursor_mz，只保留 score 最大
+        best_results = {}
+        for r in filtered_results:
+            key = (
+                r.get("latin_name"),
+                r.get("tissue"),
+                r.get("tissue"),
+                round(r.get("precursor_mz", 0), 4)  # 母离子质荷比
+            )
+            if key not in best_results or r["score"] > best_results[key]["score"]:
+                best_results[key] = r
+
+        # 3️⃣ 按 score 降序排列，保留所有符合条件的谱图
+        similar_samples_sorted = sorted(best_results.values(), key=lambda x: x["score"], reverse=True)
+
+        # 4️⃣ 构建前端显示
+        similar_samples = [
+            {
+                "latin_name": format_latin_name(r.get("latin_name")),
+                "chinese_name": r.get("chinese_name"),
+                "tissue": r.get("tissue"),
+                "score": r.get("score"),
+                "latin_slug": slugify(r.get("latin_name") or "")
+            }
+            for r in similar_samples_sorted
+        ]
+
     else:
-        similar_samples = results[:50]
+        logger.warning("⚠ No spectrum found for this compound")
+
 
     logger.info(f"✔ Similar_samples count: {len(similar_samples)}")
 
@@ -303,12 +342,11 @@ def compound_detail(request, pk):
         "debug_info": {                        # 调试信息
             "plant_sources_count": len(plant_sources),
             "similar_samples_count": len(similar_samples),
-            "spectrum_exists": bool(compound.get_spectrum())
+            "spectrum_exists": bool(spectrum)
         }
     }
 
     return render(request, "web/compound_detail.html", context)
-
 
 
 

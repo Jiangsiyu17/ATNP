@@ -1,13 +1,60 @@
 {% extends "web/base.html" %}
 {% load static %}
 
-{% block title %}Compound List{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-  {% if no_result %}
-  <p class="text-danger">无内容</p>
-  {% endif %}
-  
+
+  <!-- 欢迎信息 -->
+  <div class="text-center mb-5">
+    <h1>Welcome to ATNP Database</h1>
+    <p class="lead">A database of plant-derived anticancer natural products and their similar compounds</p>
+  </div>
+
+  <!-- 搜索框 -->
+  <div class="row justify-content-center mb-5">
+    <div class="col-md-8">
+      <form method="get" action="{% url 'search' %}">
+        <div class="input-group input-group-lg">
+          <input type="text" class="form-control" name="q" placeholder="Search compounds or herbs...">
+          <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- 快捷入口 -->
+  <div class="row text-center">
+    <div class="col-md-4 mb-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Compound List</h5>
+          <p class="card-text">Browse all compounds in the database.</p>
+          <a href="{% url 'compound_list' %}" class="btn btn-outline-primary">View Compounds</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">Herb List</h5>
+          <p class="card-text">Browse all herbs in the database.</p>
+          <a href="{% url 'herb_list' %}" class="btn btn-outline-success">View Herbs</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">About</h5>
+          <p class="card-text">Learn more about the ATNP project.</p>
+          <a href="#" class="btn btn-outline-secondary">About Us</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

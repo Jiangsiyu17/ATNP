@@ -19,6 +19,18 @@
     background-color: rgb(64, 158, 255) !important;
     color: white !important;
   }
+
+  .pubchem-link {
+  font-size: 0.85em;       /* 比正文小一点 */
+  color: #6c757d;          /* Bootstrap 灰色 */
+  margin-left: 8px;        /* 和名字留点空隙 */
+  text-decoration: none;   /* 默认不带下划线 */
+  }
+
+  .pubchem-link:hover {
+    color: #0d6efd;          /* 悬停时变成 Bootstrap 蓝色 */
+    text-decoration: underline;
+  }
 </style>
 
 <div>
@@ -39,10 +51,6 @@
 
 <!-- Content -->
 <div class="container-fluid mt-4">
-  <strong>Debug Info:</strong><br>
-  Plant_sources count: {{ debug_info.plant_sources_count }}<br>
-  Similar_samples count: {{ debug_info.similar_samples_count }}<br>
-  Spectrum exists: {{ debug_info.spectrum_exists }}
   <table class="table w-100 table-bordered table-hover">
     <tbody>
       <!-- General Information -->
@@ -51,7 +59,15 @@
       </tr>
       <tr>
         <th>Compound name</th>
-        <td><strong>{{ compound.standard }}</strong></td>
+        <td>
+          <strong>{{ compound.standard }}</strong>
+          <a href="https://pubchem.ncbi.nlm.nih.gov/#query={{ compound.standard|urlencode }}&tab=compound" 
+            target="_blank" 
+            class="pubchem-link"
+            title="在 PubChem 中搜索">
+            🔗 PubChem
+          </a>
+        </td>
       </tr>
       <tr>
         <th>SMILES</th>
@@ -97,12 +113,14 @@
       {% for ps in plant_sources %}
         <tr>
             <td>
-              <a class="text-decoration-none" href="{% url 'herb_compound_detail' latin_name=ps.latin_slug|urlencode compound=ps.compound_raw|urlencode %}">
+              <a class="text-decoration-none" 
+                href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}">
                 {{ ps.chinese_name }}
               </a>
             </td>
             <td>
-              <a class="text-decoration-none" href="{% url 'herb_compound_detail' latin_name=ps.latin_slug|urlencode compound=ps.compound_raw|urlencode %}">
+              <a class="text-decoration-none" 
+                href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}">
                 {{ ps.latin_name }}
               </a>
             </td>
@@ -117,7 +135,7 @@
 
   {% if similar_samples %}
   <h3 class="mt-5">Plants Containing Similar Compounds</h3>
-  <table class="table w-100 table-bordered table-hover mb-5">
+  <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-3">
     <thead class="table-info">
       <tr>
         <th>Latin Name</th>
@@ -132,12 +150,95 @@
           <td>{{ item.latin_name }}</td>
           <td>{{ item.chinese_name }}</td>
           <td>{{ item.tissue }}</td>
-          <td>{{ item.score }}</td>
+          <td>{{ item.score|floatformat:3 }}</td>
         </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <!-- 分页信息和导航 -->
+  <div id="similar-pagination" class="pagination-holder d-flex justify-content-between align-items-center mt-3"></div>
   {% endif %}
+
+  <script>
+  document.addEventListener("DOMContentLoaded", function() {
+      const table = document.querySelector("#similar-samples-table tbody");
+      const rows = Array.from(table.querySelectorAll("tr"));
+      const pageSize = 15;   // 每页 15 条
+      let currentPage = 1;
+
+      function renderPage(page) {
+          currentPage = page;
+          const start = (page - 1) * pageSize;
+          const end = start + pageSize;
+          
+          rows.forEach((row, i) => {
+              row.style.display = (i >= start && i < end) ? "" : "none";
+          });
+          renderPagination();
+      }
+
+      function renderPagination() {
+          const total = rows.length;
+          const totalPages = Math.ceil(total / pageSize);
+          const startIndex = (currentPage - 1) * pageSize + 1;
+          const endIndex = Math.min(currentPage * pageSize, total);
+
+          let html = `
+            <div class="page_info">
+                Displaying <b>${startIndex} - ${endIndex}</b> of <b>${total}</b> in total
+            </div>
+            <ul class="pagination pagination-sm mb-0">
+          `;
+
+          if (currentPage > 1) {
+              html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage-1}">‹ Prev</a></li>`;
+          }
+
+          // 页码范围（当前页前后 2 页）
+          let startPage = Math.max(1, currentPage - 2);
+          let endPage = Math.min(totalPages, currentPage + 2);
+
+          if (startPage > 1) {
+              html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+              if (startPage > 2) {
+                  html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
+              }
+          }
+
+          for (let i = startPage; i <= endPage; i++) {
+              html += `<li class="page-item ${i===currentPage ? "active":""}">
+                          <a class="page-link" href="#" data-page="${i}">${i}</a>
+                      </li>`;
+          }
+
+          if (endPage < totalPages) {
+              if (endPage < totalPages - 1) {
+                  html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
+              }
+              html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+          }
+
+          if (currentPage < totalPages) {
+              html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage+1}">Next ›</a></li>`;
+          }
+
+          html += `</ul>`;
+          document.querySelector("#similar-pagination").innerHTML = html;
+
+          // 绑定点击事件
+          document.querySelectorAll("#similar-pagination a[data-page]").forEach(a => {
+              a.addEventListener("click", function(e) {
+                  e.preventDefault();
+                  renderPage(parseInt(this.dataset.page));
+              });
+          });
+      }
+
+      renderPage(1); // 默认显示第 1 页
+  });
+  </script>
+
 </div>
 
 

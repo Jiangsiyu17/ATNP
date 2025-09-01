@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from . import views
 
 urlpatterns = [
@@ -9,5 +9,5 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
     # 改成 str 类型，放宽限制
-    path('herb/<str:latin_name>/<str:compound>/', views.herb_compound_detail, name="herb_compound_detail"),
+    re_path(r"^herb/(?P<latin_name>[^/]+)/(?P<compound>[^/]+)/$", views.herb_compound_detail, name="herb_compound_detail"),
 ]

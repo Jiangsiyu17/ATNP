@@ -65,31 +65,3 @@ class CompoundLibrary(models.Model):
             print(f"get_spectrum error: {e}")
         return None
 
-
-class CompoundSimilarity(models.Model):
-    compound = models.ForeignKey(
-        'CompoundLibrary',
-        on_delete=models.CASCADE,
-        related_name='similar_compounds'
-    )
-    similar_compound = models.ForeignKey(
-        'CompoundLibrary',
-        on_delete=models.CASCADE,
-        related_name='is_similar_to'
-    )
-    similarity_score = models.FloatField()
-
-    latin_name = models.CharField(max_length=255, blank=True, null=True)
-    chinese_name = models.CharField(max_length=255, blank=True, null=True)
-    tissue = models.CharField(max_length=255, blank=True, null=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=['compound']),
-            models.Index(fields=['similar_compound']),
-        ]
-        verbose_name = 'Compound Similarity'
-        verbose_name_plural = 'Compound Similarities'
-
-    def __str__(self):
-        return f"{self.compound} ~ {self.similar_compound} : {self.similarity_score:.3f}"

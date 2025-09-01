@@ -177,3 +177,23 @@ def plot_ref_mol(smi_ref):
     except Exception as e:
         print(f"plot_ref_mol error: {e}")
         return None
+    
+
+def format_latin_name(name: str) -> str:
+    """
+    规范化拉丁学名:
+      - 属名首字母大写
+      - 其余部分全部小写
+    例：
+      "panax ginseng" -> "Panax ginseng"
+      "GLYCYRRHIZA URALENSIS" -> "Glycyrrhiza uralensis"
+      "camellia SINENSIS" -> "Camellia sinensis"
+    """
+    if not name:
+        return ""
+    parts = name.split()
+    if not parts:
+        return ""
+    genus = parts[0].capitalize()
+    rest = [p.lower() for p in parts[1:]]
+    return " ".join([genus] + rest)

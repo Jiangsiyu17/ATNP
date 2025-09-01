@@ -108,19 +108,15 @@
                     <li class="nav-item"><a class="nav-link" href="{% url 'compound_list' %}">Compound List</a></li>
                 </ul>
 
-                <!-- 搜索框 -->
+                <!-- 全局搜索框 -->
                 <form class="d-flex align-items-center search-bar" action="{% url 'search' %}" method="get">
-                    <input class="form-control form-control-sm me-2" type="search" name="query" placeholder="Search">
-                    <select class="form-select form-select-sm me-2" name="category">
-                        <option value="herbs">herbs</option>
-                        <option value="compounds">compounds</option>
-                    </select>
-                    <button class="btn btn-outline-success btn-sm d-flex align-items-center" type="submit">
-                        <i class="bi bi-search search-icon"></i>
+                    <input class="form-control form-control-sm me-2" type="search" name="q" placeholder="Search">
+                    <button class="btn btn-light btn-sm d-flex align-items-center" type="submit">
+                        <i class="bi bi-search me-1"></i>
                         <span>Search</span>
                     </button>
                 </form>
-            </div>
+            </div>    
         </div>
     </nav>
 

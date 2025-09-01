@@ -103,7 +103,7 @@
                     <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
                     <td>
                         <a href="{% url 'herb_detail' herb.latin_lower %}" class="text-decoration-none">
-                            {{ herb.latin_lower }}
+                            {{ herb.latin_name }}
                         </a>
                     </td>
                     <td>{{ herb.chinese_name }}</td>
