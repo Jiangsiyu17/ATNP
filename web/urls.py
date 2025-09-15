@@ -10,4 +10,5 @@ urlpatterns = [
     path('search/', views.search, name='search'),
     # 改成 str 类型，放宽限制
     re_path(r"^herb/(?P<latin_name>[^/]+)/(?P<compound>[^/]+)/$", views.herb_compound_detail, name="herb_compound_detail"),
+    path("similar/<int:compound_id>/<int:spectrum_idx>/", views.similar_compare, name="similar_compare"),
 ]

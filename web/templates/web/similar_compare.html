@@ -1,0 +1,97 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}{{ compound.standard }}{% endblock %}
+
+{% block content %}
+<style>
+  th {
+    white-space: nowrap !important;
+    width: 1% !important;
+    min-width: 140px !important;
+  }
+  .custom-header {
+    background-color: rgb(64, 158, 255) !important;
+    color: white !important;
+  }
+</style>
+
+<div class="container-fluid mt-4">
+  <!-- 顶部标题 + 返回按钮 -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">{{ compound.standard }}</h2>
+
+    <a href="{% url 'compound_detail' pk=compound.id %}" class="btn btn-secondary btn-sm">
+      Back to Compound
+    </a>
+  </div>
+
+
+  <table class="table w-100 table-bordered table-hover mb-4">
+    <tbody>
+      <tr class="custom-header">
+        <th class="divider" colspan="2">Plants Containing Similar Compounds</th>
+      </tr>
+      <tr>
+        <th>Chinese Name</th>
+        <td><strong>{{ sample.chinese_name }}</strong></td>
+      </tr>
+      <tr>
+        <th>Latin Name</th>
+        <td>{{ sample.latin_name }}</td>
+      </tr>
+      <tr>
+        <th>Tissue</th>
+        <td>{{ sample.tissue }}</td>
+      </tr>
+      <tr>
+        <th>Similarity Score</th>
+        <td>{{ sample.similarity|floatformat:4 }}</td>
+      </tr>
+      <tr>
+        <th>Spectrum Comparison</th>
+        <td>
+          {% if comparison_plot %}
+            <img src="data:image/png;base64,{{ comparison_plot }}" class="img-fluid" />
+          {% else %}
+            <span class="text-muted">No spectrum comparison available</span>
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 如果有多条植物谱图比对，可以循环显示 -->
+  {% if similar_plants %}
+  <h5>Other Similar Plant Spectra</h5>
+  <table class="table table-striped table-bordered">
+    <thead>
+      <tr>
+        <th>Chinese Name</th>
+        <th>Latin Name</th>
+        <th>Tissue</th>
+        <th>Similarity</th>
+        <th>Comparison</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in similar_plants %}
+      <tr>
+        <td>{{ item.chinese_name }}</td>
+        <td>{{ item.latin_name }}</td>
+        <td>{{ item.tissue }}</td>
+        <td>{{ item.similarity|floatformat:4 }}</td>
+        <td>
+          {% if item.plot %}
+            <img src="data:image/png;base64,{{ item.plot }}" class="img-fluid" style="max-height:150px;" />
+          {% else %}
+            <span class="text-muted">No spectrum</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -82,35 +82,6 @@
                     <th style="min-width: 200px;">Smiles</th>
                     <th style="min-width: 160px;"></th>
                 </tr>
-                <!-- <tr>
-                    <th></th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="query" value="{{ query }}"
-                            placeholder="Search..." />
-                        <input type="hidden" name="field" value="{{ field }}" />
-                    </th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="query"
-                            placeholder="Search..." />
-                        <input type="hidden" name="field" value="PRECURSOR_MZ" />
-                    </th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="query"
-                            placeholder="Search..." />
-                        <input type="hidden" name="field" value="DATABASE" />
-                    </th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="query"
-                            placeholder="Search..." />
-                        <input type="hidden" name="field" value="smiles" />
-                    </th>
-                    <th class="d-flex gap-1">
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="bi bi-search"></i>
-                        </button>
-                        <a href="{% url 'compound_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
-                    </th>
-                </tr> -->
             </thead>
             <tbody>
                 {% for compound in compounds %}

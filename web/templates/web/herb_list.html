@@ -75,27 +75,6 @@
                     <th style="min-width: 160px;">Tissue</th>
                     <th style="min-width: 160px;"></th>
                 </tr>
-                <!-- <tr>
-                    <th></th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="latin_name" value="{{ request.GET.latin_name }}"
-                            placeholder="Search...">
-                    </th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="chinese_name" value="{{ request.GET.chinese_name }}"
-                            placeholder="Search...">
-                    </th>
-                    <th>
-                        <input type="text" class="form-control form-control-sm" name="tissue" value="{{ request.GET.tissue }}"
-                            placeholder="Search...">
-                    </th>
-                    <th class="text-nowrap">
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="bi bi-search"></i>
-                        </button>
-                        <a href="{% url 'herb_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
-                    </th>
-                </tr> -->
             </thead>
             <tbody>
                 {% for herb in herbs %}

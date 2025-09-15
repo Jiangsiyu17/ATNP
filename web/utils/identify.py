@@ -8,6 +8,7 @@ from hnswlib import Index
 from spec2vec import SpectrumDocument
 from spec2vec.vector_operations import calc_vector
 from web.models import CompoundLibrary
+import os
 
 logger = logging.getLogger(__name__)
 logger.info("identify.py loaded")
@@ -31,32 +32,43 @@ def load_models_and_indexes():
     """懒加载模型、索引和谱图"""
     global _models, _indexes, _refs
 
+    # ---------- 正离子 ----------
     if "pos" not in _models:
-        logger.info("Loading POS model and index...")
-        _models["pos"] = Word2Vec.load(MODEL_POS_PATH)
-        _indexes["pos"] = Index(space="l2", dim=VECTOR_DIM)
-        _indexes["pos"].load_index(HNSW_POS_PATH)
-        _indexes["pos"].set_ef(300)
-        with open(REFS_POS_PATH, "rb") as f:
-            _refs["pos"] = pickle.load(f)
+        try:
+            logger.info("Loading POS model and index...")
+            _models["pos"] = Word2Vec.load(MODEL_POS_PATH)
+            _indexes["pos"] = Index(space="l2", dim=VECTOR_DIM)
+            _indexes["pos"].load_index(HNSW_POS_PATH)
+            _indexes["pos"].set_ef(300)
+            with open(REFS_POS_PATH, "rb") as f:
+                _refs["pos"] = pickle.load(f)
+            logger.info(f"POS refs loaded, total: {len(_refs['pos'])}")
+        except Exception as e:
+            logger.warning(f"Failed to load POS model/index/refs: {e}")
 
+    # ---------- 负离子 ----------
     if "neg" not in _models:
-        logger.info("Loading NEG model and index...")
-        _models["neg"] = Word2Vec.load(MODEL_NEG_PATH)
-        _indexes["neg"] = Index(space="l2", dim=VECTOR_DIM)
-        _indexes["neg"].load_index(HNSW_NEG_PATH)
-        _indexes["neg"].set_ef(300)
-        with open(REFS_NEG_PATH, "rb") as f:
-            _refs["neg"] = pickle.load(f)
+        try:
+            logger.info("Loading NEG model and index...")
+            _models["neg"] = Word2Vec.load(MODEL_NEG_PATH)
+            _indexes["neg"] = Index(space="l2", dim=VECTOR_DIM)
+            _indexes["neg"].load_index(HNSW_NEG_PATH)
+            _indexes["neg"].set_ef(300)
+            with open(REFS_NEG_PATH, "rb") as f:
+                _refs["neg"] = pickle.load(f)
+            logger.info(f"NEG refs loaded, total: {len(_refs['neg'])}")
+        except Exception as e:
+            logger.warning(f"Failed to load NEG model/index/refs: {e}")
 
-def find_most_similar_spectrum(spectrum, ionmode="positive"):
+def find_most_similar_spectrum(spectrum, ionmode="positive", n_decimals=2):
     """
     spectrum: matchms.Spectrum 对象
-    ionmode: 'positive' 或 'negative'
+    ionmode: 'positive', 'negative', 'pos', 'neg', '+', '-'
     返回所有相似谱图信息，自动去重（同植物+化合物）并只保留 score>0.6
     """
     load_models_and_indexes()
-    
+
+    # ---------- 统一 ionmode ----------
     mode_map = {
         "positive": "pos",
         "pos": "pos",
@@ -65,24 +77,28 @@ def find_most_similar_spectrum(spectrum, ionmode="positive"):
         "neg": "neg",
         "-": "neg",
     }
-
-    key = ionmode.lower() if ionmode else "pos"
-    if key not in mode_map:
-        raise ValueError(f"Unsupported ionmode: {ionmode}")
-
-    mode = mode_map[key]
+    key = str(ionmode).lower() if ionmode else "pos"
+    mode = mode_map.get(key)
+    if mode is None or mode not in _refs or mode not in _models or mode not in _indexes:
+        logger.warning(f"Mode '{key}' not loaded or unavailable, skipping spectrum.")
+        return []
 
     model = _models[mode]
     hnsw = _indexes[mode]
     references = _refs[mode]
 
-    # 构建 SpectrumDocument 并计算向量
-    sdoc = SpectrumDocument(spectrum, n_decimals=2)
+    # ---------- 构建 SpectrumDocument 并计算向量 ----------
+    sdoc = SpectrumDocument(spectrum, n_decimals=n_decimals)
     vec = calc_vector(model, sdoc, allowed_missing_percentage=100)
+
+    if vec is None or np.linalg.norm(vec) == 0:
+        logger.warning(f"Spectrum {spectrum.metadata.get('compound_name','?')} produced empty vector. Skipping.")
+        return []
+
     xq = np.array(vec, dtype="float32").reshape(1, -1)
     xq /= np.linalg.norm(xq)
 
-    # knn_query
+    # ---------- knn_query ----------
     res = hnsw.knn_query(xq, k=500)
     if isinstance(res, tuple):
         idxs, distances = res
@@ -92,8 +108,8 @@ def find_most_similar_spectrum(spectrum, ionmode="positive"):
 
     temp_results = []
     for idx, dist in zip(idxs[0], distances[0]):
-        score = round(1.0 - dist / 4.0, 4)
-        if score <= 0.6:  # 只保留 score>0.6
+        score = round(1.0 - dist / 2.0, 5)
+        if score <= 0.6:
             continue
         ref_spec = references[idx]
         temp_results.append({
@@ -101,10 +117,11 @@ def find_most_similar_spectrum(spectrum, ionmode="positive"):
             "chinese_name": ref_spec.metadata.get("chinese_name"),
             "tissue": ref_spec.metadata.get("tissue"),
             "score": score,
-            "compound_name": ref_spec.metadata.get("compound_name")  # 如果有
+            "compound_name": ref_spec.metadata.get("compound_name", ""),
+            "spectrum_index": idx,
         })
 
-    # 去重：同一植物 + 同一化合物只保留得分最高的
+    # ---------- 去重 ----------
     unique_dict = {}
     for r in temp_results:
         key = (r["latin_name"], r.get("compound_name", ""))
@@ -112,7 +129,6 @@ def find_most_similar_spectrum(spectrum, ionmode="positive"):
             unique_dict[key] = r
 
     return list(unique_dict.values())
-
 
 def identify_spectrums(spectrums):
     """批量鉴定谱图列表"""

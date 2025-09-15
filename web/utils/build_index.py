@@ -3,7 +3,6 @@
 
 import os
 import sys
-from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 import pickle
 import numpy as np
@@ -63,7 +62,7 @@ def calc_ms2vec_vector_mp(spec):
 
 
 def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index_path: str, max_workers: int = None):
-    """加载谱图 -> 计算向量 -> 过滤 -> 保存pickle和索引"""
+    """加载谱图 -> 计算向量 -> 过滤 -> 保存 pickle(谱图+向量) 和索引"""
     print(f"\n📂 Loading spectra from {mgf_dir} ...")
     ionmode = "positive" if "pos" in mgf_dir.lower() else "negative"
     all_spectra = load_plant_spectra_from_folder(mgf_dir, ionmode=ionmode)
@@ -72,7 +71,7 @@ def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index
     raw_vectors = []
     raw_spectra = []
     filter_logs = []
-
+ 
     print(f"⚙️  Start vectorization with max_workers={max_workers} ...")
     with ProcessPoolExecutor(max_workers=max_workers, initializer=init_worker, initargs=(model_path,)) as executor:
         results_iter = executor.map(calc_ms2vec_vector_mp, all_spectra)
@@ -106,10 +105,14 @@ def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index
 
     print(f"✅ Valid non-zero vectors: {len(valid_spectra)} / {len(all_spectra)}")
 
-    # 💾 保存谱图对象（保证与索引一一对应）
-    print(f"💾 Saving spectra to {pickle_path}")
+    # 💾 保存谱图对象 + 向量
+    print(f"💾 Saving spectra+vectors to {pickle_path}")
+    data_to_save = [
+        {"spectrum": spec, "vector": vec}
+        for spec, vec in zip(valid_spectra, vectors)
+    ]
     with open(pickle_path, "wb") as f:
-        pickle.dump(valid_spectra, f)
+        pickle.dump(data_to_save, f)
 
     # 💾 保存日志文件
     log_path = pickle_path.replace(".pickle", "_log.txt")

@@ -107,23 +107,15 @@
       <tr>
         <th>Chinese Name</th>
         <th>Latin Name</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
       {% for ps in plant_sources %}
         <tr>
-            <td>
-              <a class="text-decoration-none" 
-                href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}">
-                {{ ps.chinese_name }}
-              </a>
-            </td>
-            <td>
-              <a class="text-decoration-none" 
-                href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}">
-                {{ ps.latin_name }}
-              </a>
-            </td>
+            <td>{{ ps.chinese_name }}</td>
+            <td>{{ ps.latin_name }}</td>
+            <td><a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}" class="btn btn-sm btn-outline-primary">View</a></td>
         </tr>
       {% empty %}
         <tr>
@@ -142,17 +134,19 @@
         <th>Chinese Name</th>
         <th>Tissue</th>
         <th>Similarity Score</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
-      {% for item in similar_samples %}
-        <tr>
-          <td>{{ item.latin_name }}</td>
-          <td>{{ item.chinese_name }}</td>
-          <td>{{ item.tissue }}</td>
-          <td>{{ item.score|floatformat:3 }}</td>
-        </tr>
-      {% endfor %}
+        {% for item in similar_samples %}
+          <tr>
+            <td>{{ item.latin_name }}</td>
+            <td>{{ item.chinese_name }}</td>
+            <td>{{ item.tissue }}</td>
+            <td>{{ item.score|floatformat:3 }}</td>
+            <td><a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=item.spectrum_idx %}?score={{ item.score }}" class="btn btn-sm btn-outline-primary">View</a></td>
+          </tr>
+        {% endfor %}
     </tbody>
   </table>
 

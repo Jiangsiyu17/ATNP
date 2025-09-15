@@ -22,6 +22,8 @@ from django.urls import reverse
 import logging
 from matchms import Spectrum
 import numpy as np
+import pickle
+from django.http import HttpResponse
 
 
 def _fallback_mz(pepmass):
@@ -322,7 +324,9 @@ def compound_detail(request, pk):
                 "chinese_name": r.get("chinese_name"),
                 "tissue": r.get("tissue"),
                 "score": r.get("score"),
-                "latin_slug": slugify(r.get("latin_name") or "")
+                "latin_slug": slugify(r.get("latin_name") or ""),
+                "precursor_mz": round(r.get("precursor_mz", 0), 4),
+                "spectrum_idx": r.get("spectrum_index"), 
             }
             for r in similar_samples_sorted
         ]
@@ -347,7 +351,6 @@ def compound_detail(request, pk):
     }
 
     return render(request, "web/compound_detail.html", context)
-
 
 
 def make_cache_key(prefix, latin_name, compound):
@@ -401,4 +404,80 @@ def herb_compound_detail(request, latin_name, compound):
         "comparison_list": comparison_list,
         "only_nist": only_nist,
         "matched_ids": matched_ids,
+    })
+
+
+# 植物谱图pickle路径
+HERB_SPECTRA_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos.pickle"
+HERB_SPECTRA_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg.pickle"
+
+# 缓存pickle避免重复加载
+_herb_spectra_cache = {"pos": None, "neg": None}
+
+def load_herb_spectra(ionmode="positive"):
+    global _herb_spectra_cache
+    key = "pos" if ionmode == "positive" else "neg"
+    if _herb_spectra_cache[key] is None:
+        path = HERB_SPECTRA_POS if key == "pos" else HERB_SPECTRA_NEG
+        with open(path, "rb") as f:
+            _herb_spectra_cache[key] = pickle.load(f)
+    return _herb_spectra_cache[key]
+
+
+from web.utils.identify import load_models_and_indexes
+from web.utils.plot_tools import plot_2_spectrum
+
+def similar_compare(request, compound_id, spectrum_idx):
+    compound_obj = get_object_or_404(CompoundLibrary, pk=compound_id)
+
+    # 基准谱图
+    ref_spectrum = compound_obj.get_spectrum()
+    if ref_spectrum is None:
+        return HttpResponse("❌ No spectrum found for this compound", status=404)
+
+    # 加载模型和植物谱图
+    load_models_and_indexes()
+    ionmode = (compound_obj.ionmode or "positive").lower()
+    mode = "pos" if ionmode.startswith("pos") else "neg"
+
+    # 获取植物谱图列表
+    from web.utils.identify import _refs
+    all_spectra = _refs.get(mode, [])
+
+    try:
+        sample_spectrum = all_spectra[spectrum_idx]
+    except IndexError:
+        return HttpResponse("❌ Invalid spectrum index", status=404)
+
+    # 生成对比图
+    comparison_plot = None
+    if sample_spectrum:
+        try:
+            from web.utils.plot_tools import plot_2_spectrum
+            comparison_plot = plot_2_spectrum(ref_spectrum, sample_spectrum)
+        except Exception as e:
+            return HttpResponse(f"⚠ Error while plotting: {e}", status=500)
+
+    # 从 GET 参数里拿分数（优先）
+    similarity = request.GET.get("score", None)
+    if similarity is not None:
+        try:
+            similarity = float(similarity)
+        except ValueError:
+            similarity = 0.0
+    else:
+        similarity = 0.0
+
+    # 提取植物信息
+    sample_info = {
+        "chinese_name": sample_spectrum.metadata.get("chinese_name", ""),
+        "latin_name": sample_spectrum.metadata.get("latin_name", ""),
+        "tissue": sample_spectrum.metadata.get("tissue", ""),
+        "similarity": similarity,
+    }
+
+    return render(request, "web/similar_compare.html", {
+        "compound": compound_obj,
+        "sample": sample_info,
+        "comparison_plot": comparison_plot,
     })

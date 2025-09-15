@@ -16,8 +16,7 @@ class WebConfig(AppConfig):
                 print("[PRELOAD] Starting to load spec2vec models and HNSW indexes...", flush=True)
                 start_time = time.time()
                 # 预加载正负离子模式
-                identify.load_model_index_refs("positive")
-                identify.load_model_index_refs("negative")
+                identify.load_models_and_indexes()
                 end_time = time.time()
                 print(f"[PRELOAD] Finished loading models in {end_time - start_time:.2f}s", flush=True)
             except Exception as e:
