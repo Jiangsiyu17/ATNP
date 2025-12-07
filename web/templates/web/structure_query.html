@@ -1,0 +1,61 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<h3 class="mt-4">Structure Query</h3>
+<hr>
+
+<p class="text-center">Draw a structure and search for similar compounds.</p>
+
+<script 
+    src="{% static 'web/jsme/jsme/jsme.nocache.js' %}" 
+    data-jsme-root="{% static 'web/jsme/jsme/' %}">
+</script>
+
+<!-- ⭐ 用 flex 居中整个画布 ⭐ -->
+<div class="d-flex justify-content-center">
+    <div id="jsme_container" style="width: 800px; height: 400px;"></div>
+</div>
+
+<script>
+    function jsmeOnLoad() {
+        window.jsme = new JSApplet.JSME(
+            "jsme_container",
+            "800px",
+            "400px",
+            {}
+        );
+    }
+
+    function submitSmiles() {
+        let smiles = window.jsme.smiles();
+        document.getElementById("id_smiles").value = smiles;
+        document.getElementById("structureForm").submit();
+    }
+
+    // ⭐ Reset 按钮：清空绘图内容
+    function resetStructure() {
+        if (window.jsme) {
+            window.jsme.reset();   // JSME 内置清空方法
+        }
+    }
+</script>
+
+<!-- ⭐ Search + Reset 按钮并排居中 ⭐ -->
+<form id="structureForm" action="{% url 'structure_query_result' %}" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="smiles" id="id_smiles">
+
+    <div class="text-center mt-3">
+        <button type="button" class="btn btn-primary me-2" onclick="submitSmiles()">
+            Search
+        </button>
+
+        <button type="button" class="btn btn-secondary" onclick="resetStructure()">
+            Reset
+        </button>
+    </div>
+</form>
+
+{% endblock %}

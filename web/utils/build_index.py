@@ -80,6 +80,7 @@ def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index
             spec = all_spectra[i]
             title = spec.metadata.get("title", f"spectrum_{i}")
             source_file = spec.metadata.get("source_file", "unknown_file")
+            spec.metadata["herb_id"] = f"{ionmode}_{i:06d}"
             if vec is not None:
                 raw_vectors.append(vec)
                 raw_spectra.append(spec)

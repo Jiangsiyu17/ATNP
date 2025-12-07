@@ -4,46 +4,64 @@
 {% block title %}{{ latin_name }} - Related Compounds{% endblock %}
 
 {% block content %}
-<div style="font-size: 20px; margin: 40px 0 20px; border-bottom: 2px solid #eeeeee; padding-bottom: 9px;">
-    Compounds related to "{{ latin_name }}"
-</div>
+<div class="container" style="max-width: 1400px;">
 
-<div class="container-fluid mt-4">
-    {% if not compounds %}
-    <p class="text-danger">No compounds found.</p>
-    {% endif %}
+    <div style="font-size: 20px; margin: 40px 0 20px; border-bottom: 2px solid #eeeeee; padding-bottom: 9px;">
+        Compounds related to "{{ latin_name }}"
+    </div>
 
-    <table class="table w-100 table-striped table-bordered table-hover">
-        <thead>
-            <tr>
-                <th style="min-width: 120px;">#</th>
-                <th style="min-width: 180px;">Compound name</th>
-                <th style="min-width: 160px;">PEPMASS</th>
-                <th style="min-width: 160px;">Database</th>
-                <th style="min-width: 200px;">Smiles</th>
-                <th style="min-width: 160px;"></th>
-            </tr>
-        </thead>
+    <div class="table-responsive mt-4">
+        {% if not compounds %}
+            <p class="text-danger">No compounds found.</p>
+        {% endif %}
+
+        <table class="table w-100 table-striped table-bordered table-hover">
+            <thead>
+                <tr>
+                    <th style="min-width: 60px;">#</th>
+                    <th style="min-width: 200px;">Compound name</th>
+                    <th style="min-width: 160px;">Precursor M/Z</th>
+                    <th style="min-width: 160px;">Database</th>
+                    <th style="min-width: 120px;">Ionmode</th>
+                    <th style="min-width: 200px;">Smiles</th>
+                    <th style="min-width: 120px;"></th>
+                </tr>
+            </thead>
+
             <tbody>
                 {% for compound in compounds %}
-                    {% if forloop.first or compound.standard != previous_standard %}
-                        <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <!-- 使用 compound.pk 确保传递有效的主键 -->
-                            <td><a href="{% url 'compound_detail' compound.first_id %}" class="text-decoration-none">{{ compound.standard }}</a></td>
-                            <td>{{ compound.pepmass|default:"N/A"|floatformat:4 }}</td>
-                            <td>{{ compound.database }}</td>
-                            <td style="font-family: monospace; font-size: 0.85em;">{{ compound.smiles }}</td>
-                            <td><a href="{% url 'compound_detail' compound.first_id %}" class="btn btn-sm btn-outline-primary">View</a></td>
-                        </tr>
-                    {% endif %}
-                    {% with previous_standard=compound.standard %}{% endwith %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+
+                    <td>
+                        <a href="{% url 'compound_detail' compound.id %}" class="text-decoration-none">
+                            {{ compound.standard }}
+                        </a>
+                    </td>
+
+                    <td>{{ compound.precursor_mz }}</td>
+
+                    <td>{{ compound.database }}</td>
+
+                    <td>{{ compound.ionmode }}</td>
+
+                    <td style="font-family: monospace; font-size: 0.85em;">
+                        {{ compound.smiles }}
+                    </td>
+
+                    <td>
+                        <a href="{% url 'compound_detail' compound.id %}" class="btn btn-sm btn-outline-primary">
+                            View
+                        </a>
+                    </td>
+                </tr>
                 {% empty %}
-                    <tr>
-                        <td colspan="6" class="text-center">No compounds found.</td>
-                    </tr>
+                <tr>
+                    <td colspan="7" class="text-center text-muted">No compounds found.</td>
+                </tr>
                 {% endfor %}
             </tbody>
-    </table>
+        </table>
+    </div>
 </div>
 {% endblock %}

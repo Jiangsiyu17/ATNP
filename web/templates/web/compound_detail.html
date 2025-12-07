@@ -49,94 +49,160 @@
   </div>
 </div>
 
-<!-- Content -->
-<div class="container-fluid mt-4">
-  <table class="table w-100 table-bordered table-hover">
-    <tbody>
-      <!-- General Information -->
-      <tr class="table-info">
-        <th class="divider" colspan="2">Compound Information</th>
-      </tr>
-      <tr>
-        <th>Compound name</th>
-        <td>
-          <strong>{{ compound.standard }}</strong>
-          <a href="https://pubchem.ncbi.nlm.nih.gov/#query={{ compound.standard|urlencode }}&tab=compound" 
-            target="_blank" 
-            class="pubchem-link"
-            title="在 PubChem 中搜索">
-            🔗 PubChem
-          </a>
-        </td>
-      </tr>
-      <tr>
-        <th>SMILES</th>
-        <td>{{ compound.smiles }}</td>
-      </tr>
-      <tr>
-        <th>Ion Mode</th>
-        <td>{{ compound.ionmode }}</td>
-      </tr>
-      <tr>
-        <th>Database source</th>
-        <td>{{ compound.database }}</td>
-      </tr>
-      <tr>
-        <th>RT in Seconds</th>
-        <td>{{ compound.rtinseconds }}</td>
-      </tr>
-      <tr>
-        <th>PEPMASS</th>
-        <td>{{ compound.pepmass|floatformat:4 }}</td>
-      </tr>
-      <tr>
-        <th>Structure</th>
-        <td>
-          {% if mol_img %}
-          <img src="data:image/png;base64,{{ mol_img }}" class="img-thumbnail" />
-          {% endif %}
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <!-- Content -->
+<table class="table w-100 table-bordered table-hover mb-4">
+
+  <!-- 标题 -->
+  <tr class="table-info">
+      <th class="text-center fs-5 py-2" colspan="2">Compound Information</th>
+  </tr>
+
+  <tr>
+    <td colspan="2">
+      <div class="row">
+
+        <!-- 左侧结构图 -->
+        <div class="col-md-4 text-center">
+            {% if mol_img %}
+                <img src="data:image/png;base64,{{ mol_img }}"
+                     class="img-fluid img-thumbnail"
+                     style="max-width: 100%;">
+            {% else %}
+                <p class="text-muted">No structure available</p>
+            {% endif %}
+        </div>
+
+        <!-- 右侧信息 -->
+        <div class="col-md-8">
+            <!-- 基础信息 -->
+            <table class="table table-sm table-borderless mb-4">
+                <tbody>
+                  <tr>
+                      <th class="text-end text-nowrap" style="width: 180px;">Compound Name</th>
+                      <td>
+                          <strong>{{ compound.standard }}</strong>
+                          <a href="https://pubchem.ncbi.nlm.nih.gov/#query={{ compound.standard|urlencode }}&tab=compound"
+                             target="_blank" class="pubchem-link">🔗 PubChem</a>
+                      </td>
+                  </tr>
+                  {% if compound.molecular_formula %}
+                  <tr>
+                      <th class="text-end text-nowrap">Molecular Formula</th>
+                      <td>{{ compound.molecular_formula }}</td>
+                  </tr>
+                  {% endif %}
+                  {% if compound.inchikey %}
+                  <tr>
+                      <th class="text-end text-nowrap">InChIKey</th>
+                      <td>{{ compound.inchikey }}</td>
+                  </tr>
+                  {% endif %}
+                  <tr>
+                      <th class="text-end text-nowrap">Ion Mode</th>
+                      <td>{{ compound.ionmode }}</td>
+                  </tr>
+                  <tr>
+                      <th class="text-end text-nowrap">Database</th>
+                      <td>{{ compound.database }}</td>
+                  </tr>
+                  <tr>
+                      <th class="text-end text-nowrap">PEPMASS</th>
+                      <td>{{ compound.precursor_mz|floatformat:4 }}</td>
+                  </tr>
+                </tbody>
+            </table>
+
+            <!-- RDKit 属性 -->
+            {% if rdkit %}
+            <div class="bg-light p-2 rounded mb-2 fw-semibold border">Calculated Properties</div>
+            <table class="table table-sm table-borderless w-100">
+                <!-- 三等分列宽 -->
+                <colgroup>
+                    <col style="width: 16.6%;">
+                    <col style="width: 16.6%;">
+                    <col style="width: 16.6%;">
+                    <col style="width: 16.6%;">
+                    <col style="width: 16.6%;">
+                    <col style="width: 16.6%;">
+                </colgroup>
+                <tbody>
+                  <tr>
+                      <th class="text-end text-nowrap">Molecular Weight</th>
+                      <td>{{ rdkit.mol_weight }}</td>
+                      <th class="text-end text-nowrap">H-bond Donors</th>
+                      <td>{{ rdkit.hbd }}</td>
+                      <th class="text-end text-nowrap">Mol LogP</th>
+                      <td>{{ rdkit.logp }}</td>
+                  </tr>
+                  <tr>
+                      <th class="text-end text-nowrap">Number of Rings</th>
+                      <td>{{ rdkit.num_rings }}</td>
+                      <th class="text-end text-nowrap">H-bond Acceptors</th>
+                      <td>{{ rdkit.hba }}</td>
+                      <th class="text-end text-nowrap">QED</th>
+                      <td>{{ rdkit.qed }}</td>
+                  </tr>
+                  <tr>
+                      <th class="text-end text-nowrap">Aromatic Rings</th>
+                      <td>{{ rdkit.num_aromatic_rings }}</td>
+                      <th class="text-end text-nowrap">Rotatable Bonds</th>
+                      <td>{{ rdkit.rotatable_bonds }}</td>
+                      <th class="text-end text-nowrap">SA Score</th>
+                      <td>{{ rdkit.sa_score }}</td>
+                  </tr>
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+      </div>
+    </td>
+  </tr>
+</table>
+<br><br>
+
 
   {# ---------- Herb Sources ------------- #}
-  <h3 class="mt-5">Herb Sources</h3>
-  <table class="table w-100 table-bordered table-hover">
+  <table class="table w-100 table-bordered table-hover mb-4">
     <thead class="table-info">
-      <tr>
-        <th>Chinese Name</th>
-        <th>Latin Name</th>
-        <th></th>
+      <tr class="table-info">
+          <th class="text-center fs-5 py-2" colspan="4">Herb Sources</th>
       </tr>
     </thead>
+      <tr class="table-secondary fw-bold">
+        <th>Chinese Name</th>
+        <th>Latin Name</th>
+        <th>Tissue</th>
+        <th></th>
+      </tr>
     <tbody>
       {% for ps in plant_sources %}
         <tr>
             <td>{{ ps.chinese_name }}</td>
             <td>{{ ps.latin_name }}</td>
-            <td><a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}" class="btn btn-sm btn-outline-primary">View</a></td>
+            <td>{{ ps.tissue }}</td>
+            <td><a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}?matched_id={{ ps.matched_id }}" class="btn btn-sm btn-outline-primary">View</a></td>
         </tr>
       {% empty %}
-        <tr>
-          <td colspan="2" class="text-muted">No herb recorded for this compound.</td>
-        </tr>
+        <tr><td colspan="4" class="text-muted">No herb recorded for this compound.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+<br><br>
 
   {% if similar_samples %}
-  <h3 class="mt-5">Plants Containing Similar Compounds</h3>
-  <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-3">
+  <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-4">
     <thead class="table-info">
-      <tr>
+      <tr class="table-info">
+          <th class="text-center fs-5 py-2" colspan="5">Plants Containing Similar Compounds</th>
+      </tr>      
+    </thead>
+      <tr class="table-secondary fw-bold">
         <th>Latin Name</th>
         <th>Chinese Name</th>
         <th>Tissue</th>
         <th>Similarity Score</th>
         <th></th>
       </tr>
-    </thead>
     <tbody>
         {% for item in similar_samples %}
           <tr>

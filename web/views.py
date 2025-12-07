@@ -24,6 +24,10 @@ from matchms import Spectrum
 import numpy as np
 import pickle
 from django.http import HttpResponse
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit import DataStructs
+import warnings
 
 
 def _fallback_mz(pepmass):
@@ -48,10 +52,14 @@ def compound_list(request):
     query = request.GET.get("query", "")
     field = request.GET.get("field", "standard")
 
-    # ① 优化查询：只筛选 spectrum_type = "sample" 并在数据库层面处理
-    qs = CompoundLibrary.objects.filter(spectrum_type="sample")
+    # 只显示有 PLANTS 字段的标品谱图
+    qs = CompoundLibrary.objects.filter(
+        spectrum_type__iexact="standard"
+    ).filter(
+        ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
+    )
 
-    # ---------- ② 查询过滤 ----------
+    # 支持搜索
     if query:
         lookups = {
             "standard": Q(standard__icontains=query),
@@ -61,33 +69,33 @@ def compound_list(request):
         }
         qs = qs.filter(lookups.get(field, Q()))
 
-    # ---------- ③ 优化：去除 unnecessary `annotate`，简化查询 ----------
-    # 直接获取需要的字段，不要做多余的 `annotate`
-    raw = qs.values("id", "standard", "precursor_mz", "database", "smiles", "pepmass") \
-             .order_by(Lower("standard"))
+    # 提取字段
+    raw = qs.values("id", "standard", "precursor_mz", "database", "smiles", "pepmass", "plants", "ionmode") \
+            .order_by(Lower("standard"))
 
-    # ---------- ④ 优化：直接在数据库层做去重分组，避免在内存中处理 ----------
-    # 利用 defaultdict 存储 unique 数据
+    # 用 (standard, ionmode) 作为去重 key
     rows_dict = defaultdict(lambda: {
         "standard": None,
+        "ionmode": None,
         "first_id": None,
         "precursor_mz": None,
         "smiles": None,
         "databases": set(),
+        "plants": None,
     })
 
     for item in raw:
-        canon_key = _canon(item["standard"])  # 规范化处理
+        canon_key = (_canon(item["standard"]), item.get("ionmode"))
         r = rows_dict[canon_key]
 
-        # 记录首次出现时的字段
         if r["standard"] is None:
             r["standard"] = item["standard"] or "(unknown)"
+            r["ionmode"] = item.get("ionmode")
             r["first_id"] = item["id"]
             r["precursor_mz"] = item["precursor_mz"] or _fallback_mz(item["pepmass"])
             r["smiles"] = item["smiles"]
+            r["plants"] = item.get("plants")
 
-        # 合并数据库名称，避免重复
         if item["database"]:
             normalized_db = _canon(item["database"])
             if normalized_db in {"nist20", "nist"}:
@@ -95,20 +103,21 @@ def compound_list(request):
             else:
                 r["databases"].add(normalized_db.upper())
 
-    # ---------- ⑤ dict → list，并整理数据库列 ----------
+    # 转换为列表
     rows = [{
         "standard": r["standard"],
+        "ionmode": r["ionmode"],
         "first_id": r["first_id"],
         "precursor_mz": f"{r['precursor_mz']:.4f}" if r["precursor_mz"] else "-",
-        "database": ", ".join(sorted(db.upper() for db in r["databases"])) or "-",
+        "database": ", ".join(sorted(r["databases"])) or "-",
         "smiles": r["smiles"],
+        "plants": r["plants"],
     } for r in rows_dict.values()]
 
-    # 按标准化名称再次排序
     rows.sort(key=lambda x: _canon(x["standard"]))
 
-    # ---------- ⑥ 分页 ----------
-    paginator = Paginator(rows, 20)  # 使用分页器，避免加载全部数据
+    # 分页
+    paginator = Paginator(rows, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(request, "web/compound_list.html", {
@@ -118,6 +127,7 @@ def compound_list(request):
         "field": field,
         "no_result": query and paginator.count == 0,
     })
+
 
 
 def herb_list(request):
@@ -166,51 +176,47 @@ def herb_list(request):
     })
 
 def herb_detail(request, latin_name):
-    # 获取与当前 latin_name 对应的化合物
-    compounds = CompoundLibrary.objects.filter(latin_name__iexact=latin_name)
+    compounds = CompoundLibrary.objects.filter(
+        latin_name__iexact=latin_name
+    ).order_by(Lower("standard"))
 
-    # 使用 defaultdict 合并相同 standard 的记录
-    rows_dict = defaultdict(lambda: {
-        "standard": None,
-        "first_id": None,
-        "precursor_mz": None,
-        "smiles": None,
-        "databases": set(),
-        "pepmass": None,  # 添加 pepmass 字段
-    })
+    rows = []
+    for c in compounds:
 
-    for compound in compounds:
-        canon_key = _canon(compound.standard)  # 标准化处理
-        r = rows_dict[canon_key]
+        # ========= 处理 precursor_mz，与 compound_list 完全一致 =========
+        if c.precursor_mz:
+            precursor = f"{c.precursor_mz:.4f}"
+        elif c.pepmass:
+            try:
+                mz_value = float(c.pepmass.split()[0])
+                precursor = f"{mz_value:.4f}"
+            except:
+                precursor = c.pepmass
+        else:
+            precursor = "-"
 
-        if r["standard"] is None:
-            r["standard"] = compound.standard or "(unknown)"
-            r["first_id"] = compound.id  # 确保是有效的 ID
-            r["precursor_mz"] = compound.precursor_mz or _fallback_mz(compound.pepmass)
-            r["smiles"] = compound.smiles
-            r["pepmass"] = compound.pepmass  # 确保传递 pepmass 字段
+        # ========= database 标准化 =========
+        if c.database:
+            db = c.database.lower()
+            db = db.replace("nist20", "nist")
+            db = db.lower()
+        else:
+            db = "-"
 
-        if compound.database:
-            normalized_db = _canon(compound.database).replace("nist20", "nist")
-            r["databases"].add(normalized_db)
+        rows.append({
+            "id": c.id,
+            "standard": c.standard or "(unknown)",
+            "precursor_mz": precursor,
+            "database": db,
+            "ionmode": c.ionmode or "-",
+            "smiles": c.smiles or "-",
+        })
 
-    # 生成最终的行数据
-    rows = [{
-        "standard": r["standard"],
-        "first_id": r["first_id"],
-        "precursor_mz": f"{r['precursor_mz']:.4f}" if r["precursor_mz"] else "-",
-        "database": ", ".join(sorted(r["databases"])).upper() or "-",
-        "smiles": r["smiles"],
-        "pepmass": r["pepmass"],  # 添加 pepmass 字段
-    } for r in rows_dict.values()]
-
-    rows.sort(key=lambda x: _canon(x["standard"]))
-
-    # 确保传递给模板的数据没有问题
     return render(request, 'web/herb_detail.html', {
-        'latin_name': format_latin_name(latin_name),
+        'latin_name': latin_name,
         'compounds': rows,
     })
+
 
 def home(request):
     return render(request, 'web/home.html')
@@ -241,6 +247,32 @@ def search(request):
     return render(request, "search_not_found.html", {"query": query})
 
 
+def parse_plants_field(plants_field):
+    """
+    解析 PLANTS=[P1:Chinese_name=卷叶欧芹;Latin_name=Petroselinum crispum var. crispum;Tissue=Root 2;matched_spectrum_id=3717];[P2:Chinese_name=虎耳草;Latin_name=Saxifraga stolonifera;Tissue=Whole plant;matched_spectrum_id=3717]
+    返回列表：
+    [
+        {"chinese_name": "卷叶欧芹", "latin_name": "Petroselinum crispum var. crispum", "tissue": "Root 2", "matched_spectrum_id": "3717"},
+        ...
+    ]
+    """
+    pattern = r"Chinese_name=(.*?);Latin_name=(.*?);Tissue=(.*?);matched_spectrum_id=(\d+)"
+    results = []
+    for match in re.findall(pattern, plants_field):
+        results.append({
+            "chinese_name": match[0],
+            "latin_name": match[1],
+            "latin_slug": slugify(match[1]),
+            "tissue": match[2],
+            "matched_spectrum_id": match[3],
+        })
+    return results
+
+from rdkit import Chem
+from rdkit.Chem import Descriptors, Lipinski, Crippen, QED
+import rdkit.Chem.AllChem as AllChem
+from web.utils import sascorer
+
 def compound_detail(request, pk):
     logger = logging.getLogger(__name__)
     logger.info(f"→ Enter compound_detail, pk={pk}")
@@ -249,22 +281,60 @@ def compound_detail(request, pk):
     compound = get_object_or_404(CompoundLibrary, pk=pk)
     mol_img = plot_ref_mol(compound.smiles) if compound.smiles else None
 
-    # ===== 表格 A：数据库来源 =====
-    qs = CompoundLibrary.objects.filter(
-        standard=compound.standard
-    ).exclude(latin_name__isnull=True).exclude(latin_name__exact='').distinct()
+    # ===== RDKit 计算性质 =====
+    rdkit_props = None
 
+    if compound.smiles:
+        mol = Chem.MolFromSmiles(compound.smiles)
+
+        if mol:
+            # 先计算不报错的性质
+            rdkit_props = {
+                "mol_weight": round(Descriptors.MolWt(mol), 2),
+                "num_rings": Lipinski.RingCount(mol),
+                "num_aromatic_rings": Lipinski.NumAromaticRings(mol),
+                "hbd": Lipinski.NumHDonors(mol),
+                "hba": Lipinski.NumHAcceptors(mol),
+                "rotatable_bonds": Lipinski.NumRotatableBonds(mol),
+                "logp": round(Crippen.MolLogP(mol), 2),
+                "qed": round(float(QED.qed(mol)), 2),
+            }
+
+            # 再计算 SA score（单独 try，不影响整个 rdkit_props）
+            try:
+                sa = sascorer.calculateScore(mol)
+                rdkit_props["sa_score"] = round(float(sa), 2)
+            except Exception as e:
+                print("SA score error:", e)
+                rdkit_props["sa_score"] = "N/A"
+
+            print("RDKit props computed:", rdkit_props)
+
+    # ===== 表格 A：来源植物（解析 PLANTS 字段） =====
     plant_sources = []
-    for item in qs:
-        # 生成安全 URL
-        compound_url = quote(compound.standard, safe='')  # 对特殊字符（包括 / + - 等）做编码
-        plant_sources.append({
-            "chinese_name": item.chinese_name,
-            "latin_name": format_latin_name(item.latin_name),
-            "latin_slug": slugify(item.latin_name),
-            "compound_raw": compound.standard,
-            "compound_url": compound_url,
-        })
+
+    if compound.plants:
+        # 匹配每个 [P1: ... ] 片段
+        entries = re.findall(r"\[(P\d+:[^\]]+)\]", compound.plants)
+
+        for entry in entries:
+            chinese_name = re.search(r"Chinese_name=([^;]+)", entry)
+            latin_name = re.search(r"Latin_name=([^;]+)", entry)
+            tissue = re.search(r"Tissue=([^;]+)", entry)
+            matched_id = re.search(r"matched_spectrum_id=([0-9]+)", entry)
+
+            ps = {
+                "chinese_name": chinese_name.group(1).strip() if chinese_name else "-",
+                "latin_name": format_latin_name(latin_name.group(1).strip()) if latin_name else "-",
+                "tissue": tissue.group(1).strip().capitalize() if tissue else "-",
+                "matched_id": matched_id.group(1).strip() if matched_id else None,
+                "latin_slug": slugify(latin_name.group(1)) if latin_name else "",
+                "compound_raw": compound.standard,
+                "compound_url": quote(compound.standard, safe=''),
+            }
+            plant_sources.append(ps)
+
+    logger.info(f"→ Parsed {len(plant_sources)} plant sources from PLANTS field")
 
     
     # ✅ 去重：同一个中文名 + 拉丁名 只保留一条
@@ -322,7 +392,7 @@ def compound_detail(request, pk):
             {
                 "latin_name": format_latin_name(r.get("latin_name")),
                 "chinese_name": r.get("chinese_name"),
-                "tissue": r.get("tissue"),
+                "tissue": (r.get("tissue") or "").capitalize(),
                 "score": r.get("score"),
                 "latin_slug": slugify(r.get("latin_name") or ""),
                 "precursor_mz": round(r.get("precursor_mz", 0), 4),
@@ -341,6 +411,7 @@ def compound_detail(request, pk):
     context = {
         "compound": compound,
         "mol_img": mol_img,
+        "rdkit": rdkit_props,
         "plant_sources": plant_sources,        # 表格 A
         "similar_samples": similar_samples,    # 表格 B
         "debug_info": {                        # 调试信息
@@ -359,57 +430,90 @@ def make_cache_key(prefix, latin_name, compound):
     return f"{prefix}_{key_hash}"
 
 def herb_compound_detail(request, latin_name, compound):
+    from urllib.parse import unquote
+    from django.utils.text import slugify
+    from web.models import CompoundLibrary
+    from web.utils.plotting import generate_spectrum_comparison
+
+    import pickle
+
+    def normalize_name(name):
+        if not name:
+            return ""
+        # 把特殊字符 × 去掉
+        name = name.replace("×", " ")
+        # 标准化多个空格
+        return " ".join(name.split()).strip().lower()
+
     latin_name = unquote(latin_name)
     compound = unquote(compound)
+    matched_id = request.GET.get("matched_id")
 
+    # ---- Step 1: 找真实拉丁名（normalize + slugify）----
     real_latin_name = None
-    for name in CompoundLibrary.objects.values_list("latin_name", flat=True).distinct():
-        if not name:
-            continue
-        if slugify(name) == latin_name:
+    all_names = CompoundLibrary.objects.values_list("latin_name", flat=True).distinct()
+
+    for name in all_names:
+        if slugify(normalize_name(name)) == latin_name:
             real_latin_name = name
             break
 
-    if real_latin_name is None:
-        entries = CompoundLibrary.objects.none()
-        only_nist = False
-    else:
-        entries = CompoundLibrary.objects.filter(
-            latin_name=real_latin_name, standard=compound
-        ).order_by("tissue")
+    # ---- Step 2: 查询 normalize 后完全一致的样品 ----
+    norm_real = normalize_name(real_latin_name)
 
-        databases = set(
-            CompoundLibrary.objects.filter(standard=compound)
-            .values_list("database", flat=True)
-            .distinct()
-        )
-        databases = {db.lower() for db in databases if db}
-        only_nist = all("nist" in db for db in databases) if databases else False
+    all_entries = CompoundLibrary.objects.filter(
+        matched_spectrum_id=matched_id,
+        spectrum_type="sample"
+    )
 
+    entries = []
+    for e in all_entries:
+        if normalize_name(e.latin_name) == norm_real:
+            spectrum = pickle.loads(e.spectrum_blob)
+            spectrum.metadata["db_id"] = e.id
+            spectrum.db_id = e.id
+            e.spectrum = spectrum
+            entries.append(e)
+
+    # ---- Step 3: 查标品 ----
+    standard = CompoundLibrary.objects.filter(
+        standard_id=matched_id,
+        spectrum_type="standard"
+    ).first()
+
+    # ---- Step 4: 图像比对 ----
     comparison_list = []
-    if entries.exists():
-        cache_key = make_cache_key("spectrum_comparison", real_latin_name, compound)
-        comparison_list = cache.get(cache_key)
+    matched_ids = []
 
-        if comparison_list is None:
-            comparison_list = generate_spectrum_comparison(entries, only_nist=only_nist)
-            cache.set(cache_key, comparison_list, timeout=60 * 15)
+    if entries and standard:
+        std_db = (standard.database or "").lower()
+        is_nist = "nist" in std_db
 
-    matched_ids = {item["sample"].id for item in comparison_list}
+        if is_nist:
+            comparison_list = generate_spectrum_comparison(entries, standards=None)
+            matched_ids = [e.id for e in entries]
+        else:
+            comparison_list = generate_spectrum_comparison(entries, standards=[standard])
+            matched_ids = [c["sample"].id for c in comparison_list]
+
+    # ---- Debug ----
+    print(f"[DEBUG] latin_name={latin_name}, real_latin_name={real_latin_name}, matched_id={matched_id}")
+    print(f"[DEBUG] sample count={len(entries)}")
+    print(f"[DEBUG] standard found={bool(standard)}")
 
     return render(request, "web/herb_compound_detail.html", {
         "latin_name": real_latin_name or latin_name,
         "compound": compound,
         "entries": entries,
         "comparison_list": comparison_list,
-        "only_nist": only_nist,
         "matched_ids": matched_ids,
     })
 
 
+
 # 植物谱图pickle路径
-HERB_SPECTRA_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos.pickle"
-HERB_SPECTRA_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg.pickle"
+HERB_SPECTRA_POS = "/data2/jiangsiyu/ATNP_Database/model_copy/herbs_spectra_pos.pickle"
+HERB_SPECTRA_NEG = "/data2/jiangsiyu/ATNP_Database/model_copy/herbs_spectra_neg.pickle"
 
 # 缓存pickle避免重复加载
 _herb_spectra_cache = {"pos": None, "neg": None}
@@ -430,49 +534,62 @@ from web.utils.plot_tools import plot_2_spectrum
 def similar_compare(request, compound_id, spectrum_idx):
     compound_obj = get_object_or_404(CompoundLibrary, pk=compound_id)
 
-    # 基准谱图
+    # === 基准谱图 ===
     ref_spectrum = compound_obj.get_spectrum()
     if ref_spectrum is None:
         return HttpResponse("❌ No spectrum found for this compound", status=404)
 
-    # 加载模型和植物谱图
+    # === 加载模型和谱图库 ===
     load_models_and_indexes()
     ionmode = (compound_obj.ionmode or "positive").lower()
     mode = "pos" if ionmode.startswith("pos") else "neg"
 
-    # 获取植物谱图列表
     from web.utils.identify import _refs
     all_spectra = _refs.get(mode, [])
 
+    # === 取植物谱图 ===
     try:
-        sample_spectrum = all_spectra[spectrum_idx]
+        sample_entry = all_spectra[spectrum_idx]
     except IndexError:
         return HttpResponse("❌ Invalid spectrum index", status=404)
+    
+    from web.utils.identify import dict_to_spectrum
 
-    # 生成对比图
-    comparison_plot = None
-    if sample_spectrum:
-        try:
-            from web.utils.plot_tools import plot_2_spectrum
-            comparison_plot = plot_2_spectrum(ref_spectrum, sample_spectrum)
-        except Exception as e:
-            return HttpResponse(f"⚠ Error while plotting: {e}", status=500)
-
-    # 从 GET 参数里拿分数（优先）
-    similarity = request.GET.get("score", None)
-    if similarity is not None:
-        try:
-            similarity = float(similarity)
-        except ValueError:
-            similarity = 0.0
+    # ✅ 兼容结构（dict or Spectrum）
+    if isinstance(sample_entry, dict):
+        sample_spectrum = sample_entry.get("spectrum", sample_entry)
     else:
+        sample_spectrum = sample_entry
+
+    # 如果 spectrum 是字符串或非法结构，也安全转换
+    if isinstance(sample_spectrum, str) or not hasattr(sample_spectrum, "peaks"):
+        sample_spectrum = dict_to_spectrum(sample_entry)
+
+    # === 生成对比图 ===
+    comparison_plot = None
+    try:
+        from web.utils.plot_tools import plot_2_spectrum
+        comparison_plot = plot_2_spectrum(ref_spectrum, sample_spectrum)
+    except Exception as e:
+        print("⚠ Plotting error:", e)
+        return HttpResponse(f"⚠ Error while plotting: {e}", status=500)
+
+    # === 相似度参数 ===
+    similarity = request.GET.get("score", "0")
+    try:
+        similarity = float(similarity)
+    except ValueError:
         similarity = 0.0
 
-    # 提取植物信息
+    # === 提取植物信息 ===
+    meta = getattr(sample_spectrum, "metadata", {})
+    if not meta and isinstance(sample_entry, dict):
+        meta = sample_entry.get("metadata", {})
+
     sample_info = {
-        "chinese_name": sample_spectrum.metadata.get("chinese_name", ""),
-        "latin_name": sample_spectrum.metadata.get("latin_name", ""),
-        "tissue": sample_spectrum.metadata.get("tissue", ""),
+        "chinese_name": meta.get("chinese_name", ""),
+        "latin_name": meta.get("latin_name", ""),
+        "tissue": meta.get("tissue", ""),
         "similarity": similarity,
     }
 
@@ -481,3 +598,119 @@ def similar_compare(request, compound_id, spectrum_idx):
         "sample": sample_info,
         "comparison_plot": comparison_plot,
     })
+
+
+def structure_query(request):
+    return render(request, "web/structure_query.html")
+
+
+def structure_search(request):
+    if request.method == "POST":
+        smiles = request.POST.get("smiles", "").strip()
+
+        if not smiles:
+            return render(request, "web/structure_query.html", {"error": "No structure provided."})
+
+        mol_query = Chem.MolFromSmiles(smiles)
+        if mol_query is None:
+            return render(request, "web/structure_query.html", {"error": "Invalid SMILES."})
+
+        # 统一 canonical SMILES
+        canonical_smiles = Chem.MolToSmiles(mol_query, canonical=True)
+        mol_query = Chem.MolFromSmiles(canonical_smiles)
+
+        # 计算查询指纹
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fp_query = AllChem.GetMorganFingerprintAsBitVect(
+                mol_query, radius=2, nBits=2048
+            )
+
+        # 只取有指纹的标品谱图 + 有 PLANTS 字段
+        qs = CompoundLibrary.objects.filter(
+            spectrum_type__iexact="standard"
+        ).filter(
+            ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
+        ).exclude(
+            morgan_fp__isnull=True
+        )
+
+        # ---------- 相似度筛选 ----------
+        tmp_hits = []
+        for c in qs:
+            fp = c.get_fingerprint()
+            if fp is None:
+                continue
+
+            sim = DataStructs.TanimotoSimilarity(fp_query, fp)
+            if sim >= 0.75:
+                tmp_hits.append((sim, c))
+
+        # 按相似度排序
+        tmp_hits.sort(key=lambda x: x[0], reverse=True)
+
+        # ---------- 去重逻辑（与 compound_list 完全一致） ----------
+        rows_dict = defaultdict(lambda: {
+            "standard": None,
+            "ionmode": None,
+            "first_id": None,
+            "precursor_mz": None,
+            "smiles": None,
+            "databases": set(),
+            "plants": None,
+            "similarity": 0.0,
+        })
+
+        for sim, obj in tmp_hits:
+            item = {
+                "id": obj.id,
+                "standard": obj.standard,
+                "precursor_mz": obj.precursor_mz,
+                "database": obj.database,
+                "smiles": obj.smiles,
+                "pepmass": obj.pepmass,
+                "plants": obj.plants,
+                "ionmode": obj.ionmode,
+            }
+
+            canon_key = (_canon(item["standard"]), item.get("ionmode"))
+            r = rows_dict[canon_key]
+
+            # 只在首次写入
+            if r["standard"] is None:
+                r["standard"] = item["standard"] or "(unknown)"
+                r["ionmode"] = item.get("ionmode")
+                r["first_id"] = item["id"]
+                r["precursor_mz"] = item["precursor_mz"] or _fallback_mz(item["pepmass"])
+                r["smiles"] = item["smiles"]
+                r["plants"] = item["plants"]
+                r["similarity"] = sim
+
+            # 规范化 database
+            if item["database"]:
+                normalized_db = _canon(item["database"])
+                if normalized_db in {"nist20", "nist"}:
+                    r["databases"].add("NIST")
+                else:
+                    r["databases"].add(normalized_db.upper())
+
+        # ---------- 转换为列表 ----------
+        rows = [{
+            "standard": r["standard"],
+            "ionmode": r["ionmode"],
+            "first_id": r["first_id"],
+            "precursor_mz": f"{r['precursor_mz']:.4f}" if r["precursor_mz"] else "-",
+            "database": ", ".join(sorted(r["databases"])) or "-",
+            "smiles": r["smiles"],
+            "plants": r["plants"],
+            "similarity": f"{r['similarity']:.3f}",
+        } for r in rows_dict.values()]
+
+        rows.sort(key=lambda x: _canon(x["standard"]))
+
+        return render(request, "web/structure_results.html", {
+            "results": rows,
+            "query_smiles": canonical_smiles,
+        })
+
+    return render(request, "web/structure_query.html")

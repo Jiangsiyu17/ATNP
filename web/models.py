@@ -5,17 +5,33 @@ import numpy as np
 from django.db import models
 from matchms import Spectrum
 import pickle
-
+from rdkit import DataStructs
 
 class CompoundLibrary(models.Model):
+    standard_id = models.CharField(max_length=50, null=True, blank=True)   # 标品的ID
+    matched_spectrum_id = models.CharField(max_length=50, null=True, blank=True)  # 样品对应的标品ID
+
     # ─── 新增 title，用于匹配 ───────────────────────
     title = models.CharField(max_length=255, blank=True, null=True, db_index=True)
 
     # ─── SMILES 字段，去掉唯一约束和索引 ───
     smiles = models.TextField(blank=True, null=True)
+    morgan_fp = models.BinaryField(blank=True, null=True)
+
+    def get_fingerprint(self):
+        if self.morgan_fp is None:
+            return None
+        try:
+            # BinaryField 读取可能是 bytes → 必须确保传入 bytes 类型
+            fp_binary = bytes(self.morgan_fp)
+            return DataStructs.CreateFromBinaryText(fp_binary)
+        except Exception as e:
+            print("get_fingerprint error:", e)
+            return None
+
 
     # ─── 基本字段 ───────────────────────────────
-    standard = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    standard = models.TextField(blank=True, null=True)
     chinese_name = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     latin_name = models.CharField(max_length=255, blank=True, null=True, db_index=True)
     tissue = models.CharField(max_length=255, blank=True, null=True)
@@ -38,6 +54,10 @@ class CompoundLibrary(models.Model):
     # ─── 谱图数据 ──────────────────────────────
     spectrum_blob = models.BinaryField(blank=True, null=True)
     peaks = models.JSONField(blank=True, null=True)
+
+    # ─── 新增：植物来源信息 ───────────────────────
+    # 用于保存匹配到该标品的植物样品来源信息（字符串格式）
+    plants = models.TextField(blank=True, null=True)
 
     class Meta:
         indexes = [
@@ -64,4 +84,3 @@ class CompoundLibrary(models.Model):
         except Exception as e:
             print(f"get_spectrum error: {e}")
         return None
-

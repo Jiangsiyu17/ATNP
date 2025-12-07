@@ -1,0 +1,50 @@
+BEGIN IONS
+STANDARD_ID=39743
+TITLE=Glabridin光甘草定
+COMPOUND_NAME=Glabridin光甘草定
+PRECURSOR_MZ=325.1436
+PARENT_MASS=324.13615911999995
+SMILES=CC1(C)C=Cc2c(ccc3c2OCC(c2ccc(O)cc2O)C3)O1
+IONMODE=positive
+INCHIKEY=LBQIJVLKGVZRIW-UHFFFAOYSA-N
+DATABASE=ATNP
+PLANTS=[P1:Chinese_name=甘草;Latin_name=Glycyrrhiza uralensis;Tissue=root;matched_spectrum_id=39743];[P2:Chinese_name=豆薯;Latin_name=Pachyrhizus erosus;Tissue=leaves;matched_spectrum_id=39743];[P3:Chinese_name=镰扁豆属;Latin_name=Dolichos fangitsa;Tissue=multiple;matched_spectrum_id=39743];[P4:Chinese_name=镰扁豆属;Latin_name=Dolichos fangitsa;Tissue=green stems;matched_spectrum_id=39743];[P5:Chinese_name=多枝盖果漆;Latin_name=Operculicarya hyphaenoides;Tissue=multiple;matched_spectrum_id=39743];[P6:Chinese_name=草薙之剑;Latin_name=Kalanchoe linearifolia;Tissue=multiple;matched_spectrum_id=39743];[P7:Chinese_name=马钱属;Latin_name=Strychnos decussata;Tissue=multiple;matched_spectrum_id=39743]
+52.996223 0.005404
+56.597519 0.004675
+60.457550 0.003596
+60.863239 0.007505
+61.077869 0.003629
+67.054955 0.004957
+68.997818 0.017806
+81.070564 0.031170
+93.070473 0.007086
+95.049416 0.004759
+98.385918 0.003735
+103.054619 0.009086
+107.049583 0.008757
+109.065155 0.007094
+121.065155 0.061528
+123.044495 0.929270
+131.049072 0.006661
+142.074432 0.003540
+145.065277 0.007953
+147.044510 0.037639
+147.080811 0.078592
+149.060043 0.557592
+161.059692 0.005796
+161.096512 0.010005
+171.080841 0.026114
+173.060211 0.010640
+174.068085 0.011259
+187.112885 0.006622
+189.091446 0.832413
+197.037949 0.003680
+197.096924 0.006502
+203.107239 0.076225
+215.106964 0.044673
+218.413605 0.012092
+218.434586 0.008064
+219.632217 0.004289
+301.758545 0.007123
+325.143860 1.000000
+END IONS

@@ -28,6 +28,11 @@
             color: white !important;
         }
 
+        .navbar-brand{
+            font-size: 28px !important;
+            font-weight: bold;
+        }
+
         .navbar .nav-link:hover {
             color: #e0e0e0 !important;
         }
@@ -89,6 +94,7 @@
             color: white;
         }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 
 <body>
@@ -106,6 +112,21 @@
                     <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'herb_list' %}">Herb List</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'compound_list' %}">Compound List</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="searchDropdown" role="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                            Search
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="searchDropdown">
+                            <li>
+                                <a class="dropdown-item" href="{% url 'structure_query' %}">
+                                    Structure Query
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li class="nav-item"><a class="nav-link" href="">Download</a></li>
+
                 </ul>
 
                 <!-- 全局搜索框 -->

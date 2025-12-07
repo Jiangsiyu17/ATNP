@@ -8,12 +8,51 @@ from rdkit.Chem import rdFMCS
 from itertools import chain
 import io
 import base64
+import json
+from matchms import Spectrum
 
 
 def plot_2_spectrum(spectrum, reference, loss=False):
     """
     Mirror plot: 上=样品红，下=参考蓝；两谱都各自归一化到 1
+    支持输入：
+      - matchms.Spectrum
+      - dict (包含 'peaks' 或 'mz'/'intensities')
+      - ORM 模型 (带 .peaks 字段)
     """
+
+    def to_spectrum(obj):
+        """将任意输入转为 matchms Spectrum 对象"""
+        if isinstance(obj, Spectrum):
+            return obj
+        elif isinstance(obj, dict):
+            # dict 格式
+            peaks = obj.get("peaks")
+            if isinstance(peaks, str):
+                peaks = json.loads(peaks)
+            if peaks:
+                mz, intensity = zip(*peaks)
+            else:
+                mz, intensity = obj.get("mz", []), obj.get("intensities", [])
+            return Spectrum(mz=list(mz), intensities=list(intensity), metadata=obj)
+        else:
+            # ORM 模型（如 CompoundLibrary）
+            peaks = getattr(obj, "peaks", [])
+            if isinstance(peaks, str):
+                peaks = json.loads(peaks)
+            if peaks:
+                mz, intensity = zip(*peaks)
+            else:
+                mz, intensity = [], []
+            return Spectrum(mz=list(mz), intensities=list(intensity), metadata={
+                "title": getattr(obj, "title", "unknown"),
+                "precursor_mz": getattr(obj, "precursor_mz", None),
+            })
+
+    # 🚀 自动转换类型
+    spectrum  = to_spectrum(spectrum)
+    reference = to_spectrum(reference)
+
     mz, intensity = spectrum.peaks.mz, spectrum.peaks.intensities
     mz_ref, inten_ref = reference.peaks.mz, reference.peaks.intensities
 
@@ -24,23 +63,24 @@ def plot_2_spectrum(spectrum, reference, loss=False):
             spectrum  = msfilters.add_losses(spectrum, 10.0, 2000.0)
             reference = msfilters.add_parent_mass(reference)
             reference = msfilters.add_losses(reference, 10.0, 2000.0)
-            mz,  intensity  = spectrum.losses.mz,   spectrum.losses.intensities
+            mz, intensity = spectrum.losses.mz, spectrum.losses.intensities
             mz_ref, inten_ref = reference.losses.mz, reference.losses.intensities
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Loss Warning] {e}")
 
-    # ----------- 归一化：各自最大峰 = 1 -----------
-    if intensity.size and intensity.max() > 0:
-        intensity = intensity / intensity.max()
-    if inten_ref.size and inten_ref.max() > 0:
-        inten_ref = inten_ref / inten_ref.max()
+    # ----------- 归一化 -----------
+    if len(intensity) and max(intensity) > 0:
+        intensity = intensity / max(intensity)
+    if len(inten_ref) and max(inten_ref) > 0:
+        inten_ref = inten_ref / max(inten_ref)
 
+    # ----------- 绘图 -----------
     fig = Figure(figsize=(5, 3), dpi=100)
     ax  = fig.add_subplot(111)
     fig.subplots_adjust(top=0.95, bottom=0.3, left=0.18, right=0.95)
 
-    ax.vlines(mz,      0,  intensity,  color="r", lw=0.5)
-    ax.vlines(mz_ref,  0, -inten_ref,  color="b", lw=0.5)
+    ax.vlines(mz, 0, intensity, color="r", lw=0.5)
+    ax.vlines(mz_ref, 0, -inten_ref, color="b", lw=0.5)
     ax.axhline(0, color="black", lw=0.5)
     ax.set_xlabel("m/z", fontsize=8)
     ax.set_ylabel("relative abundance", fontsize=8)
@@ -49,6 +89,47 @@ def plot_2_spectrum(spectrum, reference, loss=False):
     buf = io.BytesIO()
     FigureCanvas(fig).print_png(buf)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+# def plot_2_spectrum(spectrum, reference, loss=False):
+#     """
+#     Mirror plot: 上=样品红，下=参考蓝；两谱都各自归一化到 1
+#     """
+#     mz, intensity = spectrum.peaks.mz, spectrum.peaks.intensities
+#     mz_ref, inten_ref = reference.peaks.mz, reference.peaks.intensities
+
+#     # 可选：画 neutral loss
+#     if loss:
+#         try:
+#             spectrum  = msfilters.add_parent_mass(spectrum)
+#             spectrum  = msfilters.add_losses(spectrum, 10.0, 2000.0)
+#             reference = msfilters.add_parent_mass(reference)
+#             reference = msfilters.add_losses(reference, 10.0, 2000.0)
+#             mz,  intensity  = spectrum.losses.mz,   spectrum.losses.intensities
+#             mz_ref, inten_ref = reference.losses.mz, reference.losses.intensities
+#         except Exception:
+#             pass
+
+#     # ----------- 归一化：各自最大峰 = 1 -----------
+#     if intensity.size and intensity.max() > 0:
+#         intensity = intensity / intensity.max()
+#     if inten_ref.size and inten_ref.max() > 0:
+#         inten_ref = inten_ref / inten_ref.max()
+
+#     fig = Figure(figsize=(5, 3), dpi=100)
+#     ax  = fig.add_subplot(111)
+#     fig.subplots_adjust(top=0.95, bottom=0.3, left=0.18, right=0.95)
+
+#     ax.vlines(mz,      0,  intensity,  color="r", lw=0.5)
+#     ax.vlines(mz_ref,  0, -inten_ref,  color="b", lw=0.5)
+#     ax.axhline(0, color="black", lw=0.5)
+#     ax.set_xlabel("m/z", fontsize=8)
+#     ax.set_ylabel("relative abundance", fontsize=8)
+#     ax.set_ylim(-1.05, 1.05)
+
+#     buf = io.BytesIO()
+#     FigureCanvas(fig).print_png(buf)
+#     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 def plot_single_spectrum(spectrum):
     import matplotlib.pyplot as plt

@@ -60,6 +60,15 @@ def match_std_name(std_name, ref_name):
         return False
     return slugify(std_name) in slugify(ref_name) or slugify(ref_name) in slugify(std_name)
 
+def make_cache_key(*args):
+    """
+    简单生成缓存 key
+    """
+    # 拼接参数并替换空格/特殊字符
+    key = "_".join(str(a) for a in args)
+    key = key.replace(" ", "_")
+    return key
+
 def get_plot_base64(sample_obj: CompoundLibrary, candidates=None, only_nist=False) -> str | None:
     sample_spec = sample_obj.get_spectrum()
     if not is_valid_spectrum(sample_spec):
@@ -67,46 +76,25 @@ def get_plot_base64(sample_obj: CompoundLibrary, candidates=None, only_nist=Fals
         return None
 
     try:
+        # 如果要求只显示 NIST 库 → 单谱
         if only_nist:
             print(f"[Only-NIST] Drawing single spectrum for {sample_obj.title}")
             return plot_single_spectrum(sample_spec)
 
-        std_name = (sample_obj.standard or "").strip()
-        mz_query = get_precursor_mz(sample_obj)
-
-        if not std_name or mz_query is None:
-            print(f"[Fallback] No std_name or mz for {sample_obj.title}, drawing single")
+        # 如果传入了 candidates（通过 matched_spectrum_id 查找的）
+        if candidates:
+            print(f"[Match] Sample '{sample_obj.title}' → using {len(candidates)} candidates directly")
+            for ref in candidates:
+                reference_spec = ref.get_spectrum()
+                if is_valid_spectrum(reference_spec):
+                    print(f"[Compare] Plotting {sample_obj.title} vs {ref.title}")
+                    return plot_2_spectrum(sample_spec, reference_spec)
+                else:
+                    print(f"[Invalid Ref] Reference spectrum invalid for {ref.title}")
+            # 如果 candidates 都无效，就退回单谱
             return plot_single_spectrum(sample_spec)
 
-        matched_refs = []
-        for r in candidates or []:
-            r_std = (r.standard or "").strip()
-            r_mz = get_precursor_mz(r)
-            if not r_std or r_mz is None:
-                continue
-
-            name_match = match_std_name(std_name, r_std)
-            mz_match = mz_within(r_mz, mz_query)
-
-            if name_match and mz_match:
-                matched_refs.append(r)
-
-        print(f"[Match] Sample '{sample_obj.title}' → matched {len(matched_refs)} references")
-
-        if matched_refs:
-            if all("nist" in (r.database or "").lower() for r in matched_refs):
-                return plot_single_spectrum(sample_spec)
-            else:
-                for ref in matched_refs:
-                    if "nist" not in (ref.database or "").lower():
-                        reference_spec = ref.get_spectrum()
-                        if is_valid_spectrum(reference_spec):
-                            print(f"[Compare] Plotting {sample_obj.title} vs {ref.title}")
-                            return plot_2_spectrum(sample_spec, reference_spec)
-                        else:
-                            print(f"[Invalid Ref] Reference spectrum invalid for {ref.title}")
-                return plot_single_spectrum(sample_spec)
-
+        # 没有 candidates → 单谱
         print(f"[No Match] Drawing single for {sample_obj.title}")
         return plot_single_spectrum(sample_spec)
 
@@ -115,7 +103,8 @@ def get_plot_base64(sample_obj: CompoundLibrary, candidates=None, only_nist=Fals
         return None
 
 def get_cached_spectrum_plot(sample_obj: CompoundLibrary, candidates=None, only_nist=False) -> str | None:
-    cache_key = f"spectrum_plot_{sample_obj.id}_{only_nist}"
+    cache_key = f"spectrum_plot_{sample_obj.id}_{sample_obj.matched_spectrum_id}_{sample_obj.ionmode}_{only_nist}"
+
     cached_image = cache.get(cache_key)
 
     if cached_image is None:
@@ -128,54 +117,83 @@ def get_cached_spectrum_plot(sample_obj: CompoundLibrary, candidates=None, only_
 
     return cached_image
 
-def generate_spectrum_comparison(entries, only_nist=False, ppm_tol=20):
+def generate_spectrum_comparison(entries, only_nist=False, min_score=0.0, standards=None):
+    """
+    entries: 样品库 CompoundLibrary 对象列表（含 spectrum_blob）
+    standards: 标品 CompoundLibrary 列表（可为空）
+    """
+    import pickle
+
     results = []
 
     for sample in entries:
-        mz_query = get_precursor_mz(sample)
-        if mz_query is None:
+        # ---------- 取匹配 ID / score ----------
+        matched_id_raw = getattr(sample, "matched_spectrum_id", None)
+        matched_id = str(matched_id_raw).strip() if matched_id_raw else None
+        ionmode = (sample.ionmode or "").lower()
+        sample_score = getattr(sample, "score", 0.0) or 0.0
+
+        if not matched_id or sample_score < min_score:
             continue
 
-        sample_std = (sample.standard or "").strip().lower()
-        print(f"[DEBUG] Sample '{sample.title}' std='{sample_std}' pepmass={mz_query} ppm_tol={ppm_tol}")
+        # ---------- 取 Spectrum 对象 ----------
+        spectrum = getattr(sample, "spectrum", None)
+        if spectrum is None:
+            # 从 pickle 恢复 matchms Spectrum
+            spectrum = pickle.loads(sample.spectrum_blob)
+            spectrum.metadata["db_id"] = sample.id
+            spectrum.db_id = sample.id
+            sample.spectrum = spectrum
 
-        if not sample_std:
-            img = get_cached_spectrum_plot(sample, candidates=None, only_nist=only_nist)
-            if img:
-                results.append({"sample": sample, "image": img})
-            continue
+        # ---------- 从标品列表中找候选 ----------
+        if standards is not None:
+            candidates = [
+                s for s in standards
+                if str(s.standard_id or "").strip() == str(matched_id or "").strip()
+                and (s.ionmode or "").lower() == (ionmode or "").lower()
+            ]
+            if candidates:
+                candidates = [candidates[0]]
+        else:
+            candidates = []
 
-        # 精确匹配 precursor_mz，ppm_tol转化为绝对值范围，ppm_tol越小越严格
-        mz_delta = mz_query * ppm_tol * 1e-6
-
-        candidates = CompoundLibrary.objects.filter(
-            spectrum_type="standard",
-            precursor_mz__gte=mz_query - mz_delta,
-            precursor_mz__lte=mz_query + mz_delta,
-            standard__icontains=sample_std,
+        # ---------- 绘制图像 ----------
+        img = get_cached_spectrum_plot(
+            sample, 
+            candidates=candidates, 
+            only_nist=only_nist
         )
-        print(f"[DEBUG] Candidates found: {candidates.count()}")
 
-        img = get_cached_spectrum_plot(sample, candidates=candidates, only_nist=only_nist)
         if img:
-            results.append({"sample": sample, "image": img})
+            results.append({
+                "sample": sample,
+                "image": img,
+                "score": sample_score,
+            })
 
+    results.sort(key=lambda x: x["score"], reverse=True)
     return results
+
 
 def plot_ref_mol(smi_ref):
     try:
         if not smi_ref:
             return None
-        mol_ref = Chem.MolFromSmiles(smi_ref)
-        img = Draw.MolToImage(mol_ref, wedgeBonds=False)
 
+        smi_ref = smi_ref.strip().replace('"', '')
+        mol_ref = Chem.MolFromSmiles(smi_ref)
+        if mol_ref is None:
+            print(f"[plot_ref_mol] Invalid SMILES: {smi_ref}")
+            return None
+
+        img = Draw.MolToImage(mol_ref, size=(300, 300))
         buf = io.BytesIO()
         img.save(buf, format='PNG')
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
         return img_base64
+
     except Exception as e:
-        print(f"plot_ref_mol error: {e}")
+        print(f"[ERROR] plot_ref_mol failed: {e}")
         return None
     
 

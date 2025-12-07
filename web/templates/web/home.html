@@ -4,13 +4,28 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700&family=Roboto&display=swap" rel="stylesheet">
+<style>
+  .welcome-title {
+    font-family: 'Merriweather', serif;
+    font-weight: 700;
+  }
+  .welcome-subtitle {
+    font-family: 'Roboto', sans-serif;
+    font-size: 1.1rem;
+  }
+</style>
+{% endblock %}
+
 <div class="container mt-4">
 
   <!-- 欢迎信息 -->
   <div class="text-center mb-5">
-    <h1>Welcome to ATNP Database</h1>
-    <p class="lead">A database of plant-derived anticancer natural products and their similar compounds</p>
+    <h1 class="welcome-title">Welcome to ATNP Database</h1>
+    <p class="welcome-subtitle">A database of plant-derived anticancer natural products and their similar compounds</p>
   </div>
+
 
   <!-- 搜索框 -->
   <div class="row justify-content-center mb-5">
@@ -41,7 +56,7 @@
         <div class="card-body">
           <h5 class="card-title">Herb List</h5>
           <p class="card-text">Browse all herbs in the database.</p>
-          <a href="{% url 'herb_list' %}" class="btn btn-outline-success">View Herbs</a>
+          <a href="{% url 'herb_list' %}" class="btn btn-outline-primary">View Herbs</a>
         </div>
       </div>
     </div>
@@ -50,11 +65,48 @@
         <div class="card-body">
           <h5 class="card-title">About</h5>
           <p class="card-text">Learn more about the ATNP project.</p>
-          <a href="#" class="btn btn-outline-secondary">About Us</a>
+          <a href="{% url 'home' %}" class="btn btn-outline-primary">About Us</a>
         </div>
       </div>
     </div>
   </div>
-
 </div>
+
+<div class="my-5"></div>
+
+
+  <!-- 网站介绍（全宽浅灰） -->
+  <div class="container-fluid mt-3 py-3" style="background-color: rgb(226, 235, 243);">
+    <div class="row">
+      <div class="col-12">
+        <h5 class="text-center mb-3">About ATNP Database</h5>
+        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
+          The ATNP Database is a specialized resource focusing on 
+          <strong>plant-derived anticancer natural products</strong> 
+          and their related compounds. It integrates information on 
+          <strong>compounds, herbs, and spectra</strong>, providing tools 
+          for <strong>search, browsing, and similarity comparison</strong>.  
+        </p>
+        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
+          Our goal is to support research in natural product chemistry, 
+          drug discovery, and the modernization of traditional medicine. 
+          By offering comprehensive data and intuitive tools, ATNP 
+          facilitates both academic studies and practical applications 
+          in pharmaceutical development.
+        </p>
+        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
+          The <strong>Compound List</strong> section presents all anticancer natural compounds stored in the database. 
+          In the compound detail page, three tables are provided: (1) <em>Compound Information</em>, which displays the compound’s general information including name, SMILES, database source, and structure; 
+          (2) <em>Herb Sources</em>, listing the potential plants containing this compound, with each herb detail page showing basic plant information and spectrum comparisons; 
+          and (3) <em>Similar Compounds in Herbs</em>, presenting plants containing structurally or spectrally similar compounds, together with spectrum comparison details.
+        </p>
+        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
+          The <strong>Herb List</strong> section displays all plants that contain anticancer natural compounds. 
+          By clicking <em>View</em>, users can access the list of anticancer compounds identified in the selected plant.
+        </p>
+      </div>
+    </div>
+  </div>
+
+
 {% endblock %}

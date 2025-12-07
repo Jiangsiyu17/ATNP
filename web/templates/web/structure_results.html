@@ -1,0 +1,78 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<h3 class="mt-4">Structure Query Result</h3>
+<hr>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if results %}
+<div class="table-responsive mt-3">
+
+    <table class="table w-100 table-striped table-bordered table-hover">
+        <thead>
+            <tr>
+                <th style="min-width: 100px;">Similarity</th>
+                <th style="min-width: 100px;">Detail</th>
+                <th style="min-width: 180px;">Compound name</th>
+                <th style="min-width: 160px;">Precursor m/z</th>
+                <th style="min-width: 160px;">Ionmode</th>
+                <th style="min-width: 200px;">Smiles</th>
+                <th style="min-width: 160px;">Database</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for r in results %}
+            <tr>
+                {# Similarity #}
+                <td>{{ r.similarity }}</td>
+
+                {# Detail page #}
+                <td>
+                    <a href="{% url 'compound_detail' r.first_id %}" class="btn btn-sm btn-outline-primary">
+                        View
+                    </a>
+                </td>
+
+                {# Compound Name #}
+                <td>
+                    <a href="{% url 'compound_detail' r.first_id %}" class="text-decoration-none">
+                        {{ r.standard|default:"(unknown)" }}
+                    </a>
+                </td>
+
+                {# Precursor m/z #}
+                <td>
+                    {{ r.precursor_mz }}
+                </td>
+
+                {# Ionmode #}
+                <td>{{ r.ionmode|default:"-" }}</td>
+
+                {# Smiles #}
+                <td style="font-family: monospace; font-size: 0.85em;">
+                    {{ r.smiles|default:"" }}
+                </td>
+
+                {# Database 字段（已去重、统一格式） #}
+                <td>{{ r.database|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+
+    </table>
+
+</div>
+
+{% else %}
+<p class="text-danger mt-4">No similar compounds found.</p>
+{% endif %}
+
+<hr>
+
+{% endblock %}

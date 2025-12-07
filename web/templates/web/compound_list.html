@@ -66,7 +66,7 @@
     </ul>
 </div>
 
-<div class="container-fluid mt-4">
+<div class="table-responsive">
     {% if no_result %}
     <p class="text-danger">无内容</p>
     {% endif %}
@@ -79,6 +79,7 @@
                     <th style="min-width: 180px;">Compound name</th>
                     <th style="min-width: 160px;">Precursor M/Z</th>
                     <th style="min-width: 160px;">Database</th>
+                    <th style="min-width: 120px;">Ionmode</th>
                     <th style="min-width: 200px;">Smiles</th>
                     <th style="min-width: 160px;"></th>
                 </tr>
@@ -92,6 +93,7 @@
                     </td>
                     <td>{{ compound.precursor_mz }}</td>
                     <td>{{ compound.database }}</td>
+                    <td>{{ compound.ionmode|default:"-" }}</td>
                     <td style="font-family: monospace; font-size: 0.85em;">{{ compound.smiles }}</td>
                     <td><a href="{% url 'compound_detail' compound.first_id %}" class="btn btn-sm btn-outline-primary">View</a></td>
                 </tr>
