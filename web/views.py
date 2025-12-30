@@ -73,10 +73,9 @@ def compound_list(request):
     raw = qs.values("id", "standard", "precursor_mz", "database", "smiles", "pepmass", "plants", "ionmode") \
             .order_by(Lower("standard"))
 
-    # 用 (standard, ionmode) 作为去重 key
+    # 只按 standard 去重
     rows_dict = defaultdict(lambda: {
         "standard": None,
-        "ionmode": None,
         "first_id": None,
         "precursor_mz": None,
         "smiles": None,
@@ -85,12 +84,11 @@ def compound_list(request):
     })
 
     for item in raw:
-        canon_key = (_canon(item["standard"]), item.get("ionmode"))
-        r = rows_dict[canon_key]
+        key = (_canon(item["standard"]))
+        r = rows_dict[key]
 
         if r["standard"] is None:
             r["standard"] = item["standard"] or "(unknown)"
-            r["ionmode"] = item.get("ionmode")
             r["first_id"] = item["id"]
             r["precursor_mz"] = item["precursor_mz"] or _fallback_mz(item["pepmass"])
             r["smiles"] = item["smiles"]
@@ -106,9 +104,7 @@ def compound_list(request):
     # 转换为列表
     rows = [{
         "standard": r["standard"],
-        "ionmode": r["ionmode"],
         "first_id": r["first_id"],
-        "precursor_mz": f"{r['precursor_mz']:.4f}" if r["precursor_mz"] else "-",
         "database": ", ".join(sorted(r["databases"])) or "-",
         "smiles": r["smiles"],
         "plants": r["plants"],
@@ -277,18 +273,15 @@ def compound_detail(request, pk):
     logger = logging.getLogger(__name__)
     logger.info(f"→ Enter compound_detail, pk={pk}")
 
-    # 获取化合物对象
+    # ===== 基本信息 =====
     compound = get_object_or_404(CompoundLibrary, pk=pk)
     mol_img = plot_ref_mol(compound.smiles) if compound.smiles else None
 
     # ===== RDKit 计算性质 =====
     rdkit_props = None
-
     if compound.smiles:
         mol = Chem.MolFromSmiles(compound.smiles)
-
         if mol:
-            # 先计算不报错的性质
             rdkit_props = {
                 "mol_weight": round(Descriptors.MolWt(mol), 2),
                 "num_rings": Lipinski.RingCount(mol),
@@ -299,22 +292,17 @@ def compound_detail(request, pk):
                 "logp": round(Crippen.MolLogP(mol), 2),
                 "qed": round(float(QED.qed(mol)), 2),
             }
-
-            # 再计算 SA score（单独 try，不影响整个 rdkit_props）
             try:
-                sa = sascorer.calculateScore(mol)
-                rdkit_props["sa_score"] = round(float(sa), 2)
-            except Exception as e:
-                print("SA score error:", e)
+                rdkit_props["sa_score"] = round(float(sascorer.calculateScore(mol)), 2)
+            except Exception:
                 rdkit_props["sa_score"] = "N/A"
 
-            print("RDKit props computed:", rdkit_props)
-
-    # ===== 表格 A：来源植物（解析 PLANTS 字段） =====
+    # =====================================================
+    # 表格 A：来源植物（从「样品库」反查真实谱图）
+    # =====================================================
     plant_sources = []
 
     if compound.plants:
-        # 匹配每个 [P1: ... ] 片段
         entries = re.findall(r"\[(P\d+:[^\]]+)\]", compound.plants)
 
         for entry in entries:
@@ -323,71 +311,102 @@ def compound_detail(request, pk):
             tissue = re.search(r"Tissue=([^;]+)", entry)
             matched_id = re.search(r"matched_spectrum_id=([0-9]+)", entry)
 
-            ps = {
-                "chinese_name": chinese_name.group(1).strip() if chinese_name else "-",
-                "latin_name": format_latin_name(latin_name.group(1).strip()) if latin_name else "-",
-                "tissue": tissue.group(1).strip().capitalize() if tissue else "-",
-                "matched_id": matched_id.group(1).strip() if matched_id else None,
-                "latin_slug": slugify(latin_name.group(1)) if latin_name else "",
-                "compound_raw": compound.standard,
-                "compound_url": quote(compound.standard, safe=''),
-            }
-            plant_sources.append(ps)
+            chinese_name = chinese_name.group(1).strip() if chinese_name else "-"
+            latin_name = latin_name.group(1).strip() if latin_name else "-"
+            tissue = tissue.group(1).strip() if tissue else "-"
+            matched_id = matched_id.group(1) if matched_id else None
 
-    logger.info(f"→ Parsed {len(plant_sources)} plant sources from PLANTS field")
+            # 默认值
+            precursor_mz = "-"
+            ionmode = "-"
 
-    
-    # ✅ 去重：同一个中文名 + 拉丁名 只保留一条
-    plant_sources_dict = {}
+            # 🔥 核心：去「样品库」找谱图（不是标品库）
+            if matched_id:
+                sample_qs = CompoundLibrary.objects.filter(
+                    spectrum_type="sample",
+                    matched_spectrum_id=matched_id
+                )
+
+                if latin_name != "-":
+                    sample_qs = sample_qs.filter(latin_name__iexact=latin_name)
+                if tissue != "-":
+                    sample_qs = sample_qs.filter(tissue__iexact=tissue)
+
+                # ⚠ 不用 .get()，允许 POS / NEG 各一条
+                samples = sample_qs.all()
+
+                for sample in samples:
+                    mz = sample.precursor_mz or sample.pepmass
+                    if mz:
+                        precursor_mz = round(float(mz), 4)
+
+                    ionmode = sample.ionmode or "-"
+
+                    plant_sources.append({
+                        "chinese_name": chinese_name,
+                        "latin_name": format_latin_name(latin_name),
+                        "tissue": tissue.capitalize() if tissue != "-" else "-",
+                        "matched_id": matched_id,
+                        "latin_slug": slugify(latin_name),
+                        "compound_raw": compound.standard,
+                        "compound_url": quote(compound.standard, safe=""),
+                        "precursor_mz": precursor_mz,
+                        "ionmode": ionmode,
+                    })
+
+            else:
+                # 没 matched_id 的兜底展示
+                plant_sources.append({
+                    "chinese_name": chinese_name,
+                    "latin_name": format_latin_name(latin_name),
+                    "tissue": tissue.capitalize() if tissue != "-" else "-",
+                    "matched_id": None,
+                    "latin_slug": slugify(latin_name),
+                    "compound_raw": compound.standard,
+                    "compound_url": quote(compound.standard, safe=""),
+                    "precursor_mz": "-",
+                    "ionmode": "-",
+                })
+
+    # ===== 去重：中文名 + 拉丁名 + ionmode =====
+    uniq = {}
     for ps in plant_sources:
-        key = (ps["chinese_name"], ps["latin_name"])
-        if key not in plant_sources_dict:
-            plant_sources_dict[key] = ps
-    plant_sources = list(plant_sources_dict.values())
+        key = (ps["chinese_name"], ps["latin_name"], ps["ionmode"])
+        uniq[key] = ps
+    plant_sources = list(uniq.values())
 
-    logger.info(f"→ Plant_sources count: {len(plant_sources)}")
+    logger.info(f"✔ plant_sources final count = {len(plant_sources)}")
 
-    # ===== 表格 B：谱图相似来源 =====
-    cache_key = f"compound_identify_{compound.id}"
-    results = None
-    # results = cache.get(cache_key)
-    logger.info(f"→ Cache hit: {results is not None}")
-
+    # =====================================================
+    # 表格 B：谱图相似来源（你原来的逻辑，未动）
+    # =====================================================
     similar_samples = []
 
     spectrum = compound.get_spectrum()
     if spectrum:
-        logger.info(f"✔ Got spectrum, peaks count: {len(spectrum.peaks)}")
-
-        # ----- 归一化峰强度 -----
         intensities = spectrum.intensities
         if intensities.max() > 0:
             intensities = intensities / intensities.max()
-        spectrum = Spectrum(mz=spectrum.mz, intensities=intensities, metadata=spectrum.metadata)
+        spectrum = Spectrum(
+            mz=spectrum.mz,
+            intensities=intensities,
+            metadata=spectrum.metadata
+        )
 
-        # 调用 identify_spectrums 获取实际匹配结果
         raw_results = identify_spectrums([spectrum])
-        logger.info(f"✔ identify_spectrums returned {len(raw_results)} results")
+        filtered = [r for r in raw_results if r.get("score", 0) > 0.6]
 
-        # 1️⃣ 过滤 score > 0.6
-        filtered_results = [r for r in raw_results if r.get("score", 0) > 0.6]
-
-        # 2️⃣ 去重：同一 latin_name + tissue + precursor_mz，只保留 score 最大
-        best_results = {}
-        for r in filtered_results:
+        best = {}
+        for r in filtered:
             key = (
                 r.get("latin_name"),
                 r.get("tissue"),
-                r.get("tissue"),
-                round(r.get("precursor_mz", 0), 4)  # 母离子质荷比
+                round(r.get("precursor_mz", 0), 4),
+                r.get("ionmode")
             )
-            if key not in best_results or r["score"] > best_results[key]["score"]:
-                best_results[key] = r
+            if key not in best or r["score"] > best[key]["score"]:
+                best[key] = r
 
-        # 3️⃣ 按 score 降序排列，保留所有符合条件的谱图
-        similar_samples_sorted = sorted(best_results.values(), key=lambda x: x["score"], reverse=True)
-
-        # 4️⃣ 构建前端显示
         similar_samples = [
             {
                 "latin_name": format_latin_name(r.get("latin_name")),
@@ -396,32 +415,20 @@ def compound_detail(request, pk):
                 "score": r.get("score"),
                 "latin_slug": slugify(r.get("latin_name") or ""),
                 "precursor_mz": round(r.get("precursor_mz", 0), 4),
-                "spectrum_idx": r.get("spectrum_index"), 
+                "ionmode": r.get("ionmode", "-"),
+                "spectrum_idx": r.get("spectrum_index"),
             }
-            for r in similar_samples_sorted
+            for r in sorted(best.values(), key=lambda x: x["score"], reverse=True)
         ]
 
-    else:
-        logger.warning("⚠ No spectrum found for this compound")
-
-
-    logger.info(f"✔ Similar_samples count: {len(similar_samples)}")
-
-    # ===== 模板上下文 =====
-    context = {
+    # ===== 渲染 =====
+    return render(request, "web/compound_detail.html", {
         "compound": compound,
         "mol_img": mol_img,
         "rdkit": rdkit_props,
-        "plant_sources": plant_sources,        # 表格 A
-        "similar_samples": similar_samples,    # 表格 B
-        "debug_info": {                        # 调试信息
-            "plant_sources_count": len(plant_sources),
-            "similar_samples_count": len(similar_samples),
-            "spectrum_exists": bool(spectrum)
-        }
-    }
-
-    return render(request, "web/compound_detail.html", context)
+        "plant_sources": plant_sources,      # 表格 A（双离子模式）
+        "similar_samples": similar_samples,  # 表格 B
+    })
 
 
 def make_cache_key(prefix, latin_name, compound):
@@ -500,6 +507,7 @@ def herb_compound_detail(request, latin_name, compound):
     print(f"[DEBUG] latin_name={latin_name}, real_latin_name={real_latin_name}, matched_id={matched_id}")
     print(f"[DEBUG] sample count={len(entries)}")
     print(f"[DEBUG] standard found={bool(standard)}")
+    print("[DEBUG] candidates len =", len([standard] if standard else []))
 
     return render(request, "web/herb_compound_detail.html", {
         "latin_name": real_latin_name or latin_name,
@@ -530,6 +538,7 @@ def load_herb_spectra(ionmode="positive"):
 
 from web.utils.identify import load_models_and_indexes
 from web.utils.plot_tools import plot_2_spectrum
+
 
 def similar_compare(request, compound_id, spectrum_idx):
     compound_obj = get_object_or_404(CompoundLibrary, pk=compound_id)
@@ -603,114 +612,326 @@ def similar_compare(request, compound_id, spectrum_idx):
 def structure_query(request):
     return render(request, "web/structure_query.html")
 
+from web.utils.compound_aggregate import aggregate_by_inchikey, smiles_to_inchikey
 
 def structure_search(request):
     if request.method == "POST":
         smiles = request.POST.get("smiles", "").strip()
 
         if not smiles:
-            return render(request, "web/structure_query.html", {"error": "No structure provided."})
+            return render(
+                request,
+                "web/structure_query.html",
+                {"error": "No structure provided."}
+            )
 
+        # =========================================================
+        # 1️⃣ 解析并规范化查询结构
+        # =========================================================
         mol_query = Chem.MolFromSmiles(smiles)
         if mol_query is None:
-            return render(request, "web/structure_query.html", {"error": "Invalid SMILES."})
+            return render(
+                request,
+                "web/structure_query.html",
+                {"error": "Invalid SMILES."}
+            )
 
-        # 统一 canonical SMILES
         canonical_smiles = Chem.MolToSmiles(mol_query, canonical=True)
         mol_query = Chem.MolFromSmiles(canonical_smiles)
 
-        # 计算查询指纹
+        # 查询 InChIKey（用于精确匹配）
+        try:
+            query_inchikey = Chem.inchi.MolToInchiKey(mol_query)
+        except Exception:
+            query_inchikey = None
+
+        # =========================================================
+        # 2️⃣ 计算查询指纹（用于相似度搜索）
+        # =========================================================
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             fp_query = AllChem.GetMorganFingerprintAsBitVect(
-                mol_query, radius=2, nBits=2048
+                mol_query,
+                radius=2,
+                nBits=2048
             )
 
-        # 只取有指纹的标品谱图 + 有 PLANTS 字段
+        # =========================================================
+        # 3️⃣ 查询候选标品
+        # =========================================================
         qs = CompoundLibrary.objects.filter(
             spectrum_type__iexact="standard"
         ).filter(
             ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
         ).exclude(
-            morgan_fp__isnull=True
+            smiles__isnull=True
+        ).exclude(
+            smiles=""
         )
 
-        # ---------- 相似度筛选 ----------
-        tmp_hits = []
-        for c in qs:
-            fp = c.get_fingerprint()
+        # =========================================================
+        # 4️⃣ InChIKey 精确匹配（最高优先级）
+        # =========================================================
+        exact_hits = []
+        if query_inchikey:
+            for obj in qs:
+                try:
+                    if smiles_to_inchikey(obj.smiles) == query_inchikey:
+                        exact_hits.append(obj)
+                except Exception:
+                    continue
+
+        if exact_hits:
+            results = aggregate_by_inchikey(exact_hits)
+            for r in results:
+                r["similarity"] = "1.000"
+
+            return render(
+                request,
+                "web/structure_results.html",
+                {
+                    "results": results,
+                    "query_smiles": canonical_smiles,
+                }
+            )
+
+        # =========================================================
+        # 5️⃣ 指纹相似度搜索（兜底方案）
+        # =========================================================
+        SIM_THRESHOLD = 0.3   # ✅ 推荐：0.3–0.5，0.75 太严格
+
+        matched_objects = []
+        similarity_map = {}   # obj.id → max similarity
+
+        for obj in qs:
+            fp = obj.get_fingerprint()
             if fp is None:
                 continue
 
             sim = DataStructs.TanimotoSimilarity(fp_query, fp)
-            if sim >= 0.75:
-                tmp_hits.append((sim, c))
+            if sim >= SIM_THRESHOLD:
+                matched_objects.append(obj)
+                similarity_map[obj.id] = max(
+                    similarity_map.get(obj.id, 0),
+                    sim
+                )
 
-        # 按相似度排序
-        tmp_hits.sort(key=lambda x: x[0], reverse=True)
+        if not matched_objects:
+            return render(
+                request,
+                "web/structure_results.html",
+                {
+                    "results": [],
+                    "query_smiles": canonical_smiles,
+                }
+            )
 
-        # ---------- 去重逻辑（与 compound_list 完全一致） ----------
-        rows_dict = defaultdict(lambda: {
-            "standard": None,
-            "ionmode": None,
-            "first_id": None,
-            "precursor_mz": None,
-            "smiles": None,
-            "databases": set(),
-            "plants": None,
-            "similarity": 0.0,
-        })
+        # =========================================================
+        # 6️⃣ InChIKey 统一聚合 + 相似度排序
+        # =========================================================
+        results = aggregate_by_inchikey(matched_objects)
 
-        for sim, obj in tmp_hits:
-            item = {
-                "id": obj.id,
-                "standard": obj.standard,
-                "precursor_mz": obj.precursor_mz,
-                "database": obj.database,
-                "smiles": obj.smiles,
-                "pepmass": obj.pepmass,
-                "plants": obj.plants,
-                "ionmode": obj.ionmode,
+        for r in results:
+            r["similarity"] = f"{similarity_map.get(r['first_id'], 0):.3f}"
+
+        results.sort(
+            key=lambda x: float(x.get("similarity", 0)),
+            reverse=True
+        )
+
+        return render(
+            request,
+            "web/structure_results.html",
+            {
+                "results": results,
+                "query_smiles": canonical_smiles,
             }
-
-            canon_key = (_canon(item["standard"]), item.get("ionmode"))
-            r = rows_dict[canon_key]
-
-            # 只在首次写入
-            if r["standard"] is None:
-                r["standard"] = item["standard"] or "(unknown)"
-                r["ionmode"] = item.get("ionmode")
-                r["first_id"] = item["id"]
-                r["precursor_mz"] = item["precursor_mz"] or _fallback_mz(item["pepmass"])
-                r["smiles"] = item["smiles"]
-                r["plants"] = item["plants"]
-                r["similarity"] = sim
-
-            # 规范化 database
-            if item["database"]:
-                normalized_db = _canon(item["database"])
-                if normalized_db in {"nist20", "nist"}:
-                    r["databases"].add("NIST")
-                else:
-                    r["databases"].add(normalized_db.upper())
-
-        # ---------- 转换为列表 ----------
-        rows = [{
-            "standard": r["standard"],
-            "ionmode": r["ionmode"],
-            "first_id": r["first_id"],
-            "precursor_mz": f"{r['precursor_mz']:.4f}" if r["precursor_mz"] else "-",
-            "database": ", ".join(sorted(r["databases"])) or "-",
-            "smiles": r["smiles"],
-            "plants": r["plants"],
-            "similarity": f"{r['similarity']:.3f}",
-        } for r in rows_dict.values()]
-
-        rows.sort(key=lambda x: _canon(x["standard"]))
-
-        return render(request, "web/structure_results.html", {
-            "results": rows,
-            "query_smiles": canonical_smiles,
-        })
+        )
 
     return render(request, "web/structure_query.html")
+
+def molecular_weight_query(request):
+    """
+    仅显示 MW 搜索表单，不显示任何查询结果
+    """
+    return render(request, 'web/molecular_weight_query.html')
+
+from rdkit import Chem
+from rdkit.Chem import inchi
+
+
+from collections import defaultdict
+from django.db.models import Q
+from django.db.models.functions import Lower
+
+
+def molecular_weight_search(request):
+    if request.method == "POST":
+        min_mw = request.POST.get("min_mw", "").strip()
+        max_mw = request.POST.get("max_mw", "").strip()
+
+        try:
+            min_mw = float(min_mw) if min_mw else None
+            max_mw = float(max_mw) if max_mw else None
+        except ValueError:
+            return render(request, "web/molecular_weight_query.html", {
+                "error": "Invalid number input."
+            })
+
+        qs = CompoundLibrary.objects.filter(
+            spectrum_type__iexact="standard"
+        ).filter(
+            ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
+        ).exclude(
+            smiles__isnull=True
+        ).exclude(
+            smiles=""
+        )
+
+        if min_mw is not None:
+            qs = qs.filter(precursor_mz__gte=min_mw)
+        if max_mw is not None:
+            qs = qs.filter(precursor_mz__lte=max_mw)
+
+        results = aggregate_by_inchikey(qs)
+
+        return render(request, "web/molecular_weight_results.html", {
+            "results": results,
+            "min_mw": min_mw,
+            "max_mw": max_mw,
+        })
+
+    return render(request, "web/molecular_weight_query.html")
+
+
+def msms_search(request):
+    """显示搜索页面"""
+    return render(request, 'web/msms_search.html')
+
+
+from django.shortcuts import render
+from django.db.models import Q
+import numpy as np
+from matchms import Spectrum
+from matchms.filtering import (
+    normalize_intensities,
+    select_by_mz,
+    require_minimum_number_of_peaks
+)
+
+def msms_result(request):
+    results = []
+    error = None
+
+    if not request.GET:
+        return render(request, "web/msms_result.html", {
+            "results": [],
+            "error": None
+        })
+
+    # ======================================================
+    # 1️⃣ 解析输入 MS/MS
+    # ======================================================
+    try:
+        msms_input = request.GET.get("msms_spectrum", "").strip()
+        parent_mz  = request.GET.get("parent_mz")
+        ion_mode   = request.GET.get("ion_mode", "").lower().strip()
+
+        peaks = []
+        for line in msms_input.splitlines():
+            parts = line.strip().split()
+            if len(parts) != 2:
+                continue
+            mz, intensity = map(float, parts)
+            peaks.append((mz, intensity))
+
+        if len(peaks) < 3:
+            raise ValueError("At least 3 valid MS/MS peaks required.")
+
+        mzs = np.array([p[0] for p in peaks], dtype=float)
+        intensities = np.array([p[1] for p in peaks], dtype=float)
+
+        metadata = {"ionmode": ion_mode}
+        if parent_mz:
+            metadata["precursor_mz"] = float(parent_mz)
+
+        spectrum = Spectrum(mz=mzs, intensities=intensities, metadata=metadata)
+
+        spectrum = normalize_intensities(spectrum)
+        spectrum = select_by_mz(spectrum, mz_from=50, mz_to=2000)
+        spectrum = require_minimum_number_of_peaks(spectrum, n_required=3)
+
+        if spectrum is None:
+            raise ValueError("Spectrum discarded after preprocessing.")
+
+    except Exception as e:
+        return render(request, "web/msms_result.html", {
+            "error": f"MS/MS spectrum parsing error: {e}"
+        })
+
+    # ======================================================
+    # 2️⃣ 谱图搜索（植物样本库）
+    # ======================================================
+    raw_results = identify_spectrums([spectrum])
+    filtered = [r for r in raw_results if r.get("score", 0) >= 0.6]
+
+    if not filtered:
+        return render(request, "web/msms_result.html", {
+            "results": [],
+            "error": "No matched plant spectra found."
+        })
+
+    # ======================================================
+    # 3️⃣ ORM 顺序必须和建模一致（sample）
+    # ======================================================
+    sample_qs = list(
+        CompoundLibrary.objects.filter(
+            spectrum_type="sample"
+        ).order_by("id")
+    )
+
+    if not sample_qs:
+        return render(request, "web/msms_result.html", {
+            "results": [],
+            "error": "Plant spectrum database is empty."
+        })
+
+    # ======================================================
+    # 4️⃣ 聚合为「植物」维度
+    # ======================================================
+    herb_map = {}
+    for r in filtered:
+        idx = r.get("spectrum_index")
+        score = r.get("score", 0)
+
+        if idx is None or idx < 0 or idx >= len(sample_qs):
+            continue
+
+        obj = sample_qs[idx]
+        key = (obj.latin_name, obj.chinese_name, obj.tissue)
+
+        if key not in herb_map:
+            herb_map[key] = {
+                "latin_name": obj.latin_name,
+                "chinese_name": obj.chinese_name,
+                "tissue": obj.tissue,
+                "best_score": score
+            }
+        else:
+            herb_map[key]["best_score"] = max(
+                herb_map[key]["best_score"], score
+            )
+
+    results = sorted(
+        herb_map.values(),
+        key=lambda x: x["best_score"],
+        reverse=True
+    )
+
+    for r in results:
+        r["best_score"] = f"{r['best_score']:.4f}"
+
+    return render(request, "web/msms_result.html", {
+        "results": results,
+        "error": None
+    })

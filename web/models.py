@@ -19,14 +19,14 @@ class CompoundLibrary(models.Model):
     morgan_fp = models.BinaryField(blank=True, null=True)
 
     def get_fingerprint(self):
-        if self.morgan_fp is None:
+        """
+        从数据库中反序列化 Morgan FP
+        """
+        if not self.morgan_fp:
             return None
         try:
-            # BinaryField 读取可能是 bytes → 必须确保传入 bytes 类型
-            fp_binary = bytes(self.morgan_fp)
-            return DataStructs.CreateFromBinaryText(fp_binary)
-        except Exception as e:
-            print("get_fingerprint error:", e)
+            return DataStructs.CreateFromBinaryText(self.morgan_fp)
+        except Exception:
             return None
 
 

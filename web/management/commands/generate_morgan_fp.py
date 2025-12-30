@@ -3,19 +3,42 @@ from web.models import CompoundLibrary
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit import DataStructs
+from tqdm import tqdm
 import warnings
+from django.conf import settings
 
 class Command(BaseCommand):
-    help = "Generate correct Morgan fingerprints (binary RDKit format)"
-
+    help = "Recalculate Morgan FP only for RDKit-valid SMILES"
     def handle(self, *args, **kwargs):
-        qs = CompoundLibrary.objects.all()
+        self.stdout.write("=== DEBUG DATABASE INFO ===")
+        self.stdout.write(f"DB ENGINE: {settings.DATABASES['default']['ENGINE']}")
+        self.stdout.write(f"DB NAME  : {settings.DATABASES['default']['NAME']}")
+        self.stdout.write(f"DB HOST  : {settings.DATABASES['default'].get('HOST')}")
+        self.stdout.write("===========================")
+
+        self.stdout.write(f"TOTAL COUNT   : {CompoundLibrary.objects.count()}")
+        self.stdout.write(
+            f"STANDARD COUNT: {CompoundLibrary.objects.filter(spectrum_type__iexact='standard').count()}"
+        )
+        qs = CompoundLibrary.objects.filter(
+            spectrum_type__iexact="standard"
+        ).exclude(
+            smiles__isnull=True
+        ).exclude(
+            smiles=""
+        )
+
+
         total = qs.count()
+        updated = 0
+        skipped = 0
 
-        self.stdout.write(f"Generating Morgan fingerprints for {total} compounds...")
+        self.stdout.write(f"Recalculating Morgan FP for {total} valid compounds...")
 
-        for i, c in enumerate(qs.iterator(), start=1):
-            if not c.smiles:
+        for c in tqdm(qs.iterator(), total=total):
+            # 已有指纹就跳过（可选）
+            if c.morgan_fp:
+                skipped += 1
                 continue
 
             try:
@@ -25,17 +48,17 @@ class Command(BaseCommand):
 
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
+                    fp = AllChem.GetMorganFingerprintAsBitVect(
+                        mol, radius=2, nBits=2048
+                    )
 
-                # 🔥用 rdkit 官方二进制格式 保存指纹（重点）
                 c.morgan_fp = DataStructs.BitVectToBinaryText(fp)
-
                 c.save(update_fields=["morgan_fp"])
+                updated += 1
 
             except Exception:
                 continue
 
-            if i % 1000 == 0:
-                self.stdout.write(f"...processed {i}/{total}")
-
-        self.stdout.write(self.style.SUCCESS("Done."))
+        self.stdout.write(self.style.SUCCESS("Done"))
+        self.stdout.write(f"✔ Updated: {updated}")
+        self.stdout.write(f"↪ Skipped (already had fp): {skipped}")

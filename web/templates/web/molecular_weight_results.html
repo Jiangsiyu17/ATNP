@@ -1,0 +1,55 @@
+{% extends "web/base.html" %}
+{% block content %}
+
+<h3 class="mt-4">Molecular Weight Search Results</h3>
+<hr>
+
+{% if results %}
+<div class="table-responsive mt-3">
+    <table class="table table-striped table-bordered table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th style="min-width: 200px;">Compound Name</th>
+                <th style="min-width: 140px;">Precursor m/z</th>
+                <th style="min-width: 120px;">Ion mode</th>
+                <th style="min-width: 140px;">Database</th>
+                <th style="min-width: 220px;">SMILES</th>
+                <th style="min-width: 90px;">Detail</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for r in results %}
+            <tr>
+                <td>
+                    <a href="{% url 'compound_detail' r.first_id %}" class="text-decoration-none">
+                        {{ r.compound_name }}
+                    </a>
+                </td>
+
+                <td>{{ r.precursor_mz|default:"-" }}</td>
+                <td>{{ r.ionmode|default:"-" }}</td>
+                <td>{{ r.database|default:"-" }}</td>
+
+                <td style="font-family: monospace; font-size: 0.85em;">
+                    {{ r.smiles|default:"-" }}
+                </td>
+
+                <td class="text-center">
+                    <a href="{% url 'compound_detail' r.first_id %}"
+                    class="btn btn-sm btn-outline-primary">
+                        View
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+
+    </table>
+</div>
+
+{% else %}
+<p class="text-danger mt-4">No compounds found.</p>
+{% endif %}
+
+<hr>
+{% endblock %}

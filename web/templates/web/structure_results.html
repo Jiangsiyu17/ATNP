@@ -3,7 +3,7 @@
 
 {% block content %}
 
-<h3 class="mt-4">Structure Query Result</h3>
+<h3 class="mt-4">Structure Query Results</h3>
 <hr>
 
 {% if error %}
@@ -13,15 +13,13 @@
 {% if results %}
 <div class="table-responsive mt-3">
 
-    <table class="table w-100 table-striped table-bordered table-hover">
-        <thead>
+    <table class="table w-100 table-striped table-bordered table-hover align-middle">
+        <thead class="table-light">
             <tr>
-                <th style="min-width: 100px;">Similarity</th>
-                <th style="min-width: 100px;">Detail</th>
-                <th style="min-width: 180px;">Compound name</th>
-                <th style="min-width: 160px;">Precursor m/z</th>
-                <th style="min-width: 160px;">Ionmode</th>
-                <th style="min-width: 200px;">Smiles</th>
+                <th style="min-width: 110px;">Similarity</th>
+                <th style="min-width: 90px;">Detail</th>
+                <th style="min-width: 220px;">Compound Name</th>
+                <th style="min-width: 220px;">SMILES</th>
                 <th style="min-width: 160px;">Database</th>
             </tr>
         </thead>
@@ -33,33 +31,27 @@
                 <td>{{ r.similarity }}</td>
 
                 {# Detail page #}
-                <td>
-                    <a href="{% url 'compound_detail' r.first_id %}" class="btn btn-sm btn-outline-primary">
+                <td class="text-center">
+                    <a href="{% url 'compound_detail' r.first_id %}"
+                       class="btn btn-sm btn-outline-primary">
                         View
                     </a>
                 </td>
 
                 {# Compound Name #}
                 <td>
-                    <a href="{% url 'compound_detail' r.first_id %}" class="text-decoration-none">
-                        {{ r.standard|default:"(unknown)" }}
+                    <a href="{% url 'compound_detail' r.first_id %}"
+                       class="text-decoration-none">
+                        {{ r.compound_name }}
                     </a>
                 </td>
 
-                {# Precursor m/z #}
-                <td>
-                    {{ r.precursor_mz }}
-                </td>
-
-                {# Ionmode #}
-                <td>{{ r.ionmode|default:"-" }}</td>
-
                 {# Smiles #}
                 <td style="font-family: monospace; font-size: 0.85em;">
-                    {{ r.smiles|default:"" }}
+                    {{ r.smiles|default:"-" }}
                 </td>
 
-                {# Database 字段（已去重、统一格式） #}
+                {# Database #}
                 <td>{{ r.database|default:"-" }}</td>
             </tr>
             {% endfor %}

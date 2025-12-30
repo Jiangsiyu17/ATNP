@@ -21,5 +21,9 @@ urlpatterns = [
     path("structure-query/", views.structure_query, name="structure_query"),
     path("structure-query/result/", views.structure_search, name="structure_query_result"),
 
+    path('molecular_weight_query/', views.molecular_weight_query, name='molecular_weight_query'),
+    path('molecular_weight_search/', views.molecular_weight_search, name='molecular_weight_search'),
 
+    path('msms_search/', views.msms_search, name='msms_search'),
+    path('msms_result/', views.msms_result, name='msms_result'),
 ]

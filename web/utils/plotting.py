@@ -102,18 +102,39 @@ def get_plot_base64(sample_obj: CompoundLibrary, candidates=None, only_nist=Fals
         print("[Error] plot_2_spectrum:", e)
         return None
 
-def get_cached_spectrum_plot(sample_obj: CompoundLibrary, candidates=None, only_nist=False) -> str | None:
-    cache_key = f"spectrum_plot_{sample_obj.id}_{sample_obj.matched_spectrum_id}_{sample_obj.ionmode}_{only_nist}"
+def get_cached_spectrum_plot(
+    sample_obj: CompoundLibrary,
+    candidates=None,
+    only_nist=False
+) -> str | None:
+
+    # 🔑 是否存在参考谱（决定是单谱还是对比谱）
+    has_ref = "with_ref" if candidates else "single"
+
+    cache_key = (
+        f"spectrum_plot_"
+        f"{sample_obj.id}_"
+        f"{sample_obj.matched_spectrum_id}_"
+        f"{sample_obj.ionmode}_"
+        f"{only_nist}_"
+        f"{has_ref}"
+    )
 
     cached_image = cache.get(cache_key)
 
     if cached_image is None:
-        print(f"[Cache Miss] Generating plot for sample id={sample_obj.id}")
+        print(
+            f"[Cache Miss] Generating plot for sample id={sample_obj.id} "
+            f"(mode={has_ref})"
+        )
         cached_image = get_plot_base64(sample_obj, candidates, only_nist)
         if cached_image:
             cache.set(cache_key, cached_image, timeout=3600)
     else:
-        print(f"[Cache Hit] Found cached plot for sample id={sample_obj.id}")
+        print(
+            f"[Cache Hit] Found cached plot for sample id={sample_obj.id} "
+            f"(mode={has_ref})"
+        )
 
     return cached_image
 
@@ -146,14 +167,9 @@ def generate_spectrum_comparison(entries, only_nist=False, min_score=0.0, standa
             sample.spectrum = spectrum
 
         # ---------- 从标品列表中找候选 ----------
-        if standards is not None:
-            candidates = [
-                s for s in standards
-                if str(s.standard_id or "").strip() == str(matched_id or "").strip()
-                and (s.ionmode or "").lower() == (ionmode or "").lower()
-            ]
-            if candidates:
-                candidates = [candidates[0]]
+        if standards:
+            # 页面已经明确指定了标品，直接用
+            candidates = standards[:1]
         else:
             candidates = []
 

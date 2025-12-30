@@ -1,0 +1,60 @@
+{% extends "web/base.html" %}
+{% block title %}Molecular Weight Query{% endblock %}
+
+{% block content %}
+
+<style>
+    ::placeholder {
+        color: #d3d3d3 !important;
+        opacity: 1 !important;
+    }
+    :-ms-input-placeholder {
+        color: #d3d3d3 !important;
+    }
+    ::-ms-input-placeholder {
+        color: #d3d3d3 !important;
+    }
+</style>
+
+<div class="container mt-4">
+    <h3 class="mb-4">Molecular Weight Query</h3>
+    <hr>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <!-- 搜索区域加灰色背景 -->
+    <div class="p-4 mb-4" style="background-color: #f5f5f5; border-radius: 10px;">
+
+        <!-- 搜索表单 -->
+        <form method="POST" action="{% url 'molecular_weight_search' %}">
+            {% csrf_token %}
+
+            <!-- 输入框放在一行但拉开间距 -->
+            <div class="row mb-3">
+                <div class="col-md-5">
+                    <label for="min_mw" class="form-label">Minimum weight</label>
+                    <input type="number" step="0.01" class="form-control" id="min_mw" 
+                           name="min_mw" placeholder="e.g. 200.0">
+                </div>
+
+                <div class="col-md-5 offset-md-1">
+                    <label for="max_mw" class="form-label">Maximum weight</label>
+                    <input type="number" step="0.01" class="form-control" id="max_mw" 
+                           name="max_mw" placeholder="e.g. 205.0">
+                </div>
+            </div>
+
+            <!-- 按钮放在下方 -->
+            <div>
+                <button type="submit" class="btn btn-primary btn-sm me-2">Search</button>
+                <button type="reset" class="btn btn-secondary btn-sm">Reset</button>
+            </div>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

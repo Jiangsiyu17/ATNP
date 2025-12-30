@@ -119,9 +119,13 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="searchDropdown">
                             <li>
-                                <a class="dropdown-item" href="{% url 'structure_query' %}">
-                                    Structure Query
-                                </a>
+                                <a class="dropdown-item" href="{% url 'structure_query' %}">Structure Query</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'molecular_weight_query' %}">Molecular Weight Query</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'msms_search' %}">MS/MS Query</a>
                             </li>
                         </ul>
                     </li>

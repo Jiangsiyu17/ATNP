@@ -1,0 +1,94 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}MS/MS Search{% endblock %}
+
+{% block content %}
+
+<style>
+    ::placeholder {
+        color: #d3d3d3 !important;   /* 淡灰色 */
+        opacity: 1 !important;        /* 避免不同浏览器自动调低透明度 */
+    }
+
+    /* Safari 和旧版浏览器兼容 */
+    :-ms-input-placeholder {
+        color: #d3d3d3 !important;
+    }
+    ::-ms-input-placeholder {
+        color: #d3d3d3 !important;
+    }
+</style>
+
+<div class="container mt-4">
+    <h3>MS/MS Query</h3>
+    <hr>
+    <div class="p-4" style="background-color: #f5f5f5; border-radius: 8px;">
+        <form method="get" action="{% url 'msms_result' %}">
+                <div class="row">
+
+                    <!-- 左侧输入框 -->
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">MS/MS spectrum (m/z & Intensity):</label>
+                        <textarea name="msms_spectrum" class="form-control" rows="12"></textarea>
+                    </div>
+
+                    <!-- 右侧整体垂直居中 -->
+                    <div class="col-md-6 d-flex flex-column justify-content-center">
+
+                        <!-- Parent Ion m/z -->
+                        <div class="row mb-3 align-items-center">
+                            <label class="col-5 col-form-label text-end">Parent Ion m/z:</label>
+                            <div class="col-7">
+                                <input type="text" name="parent_mz" class="form-control" placeholder="e.g. 239.2006">
+                            </div>
+                        </div>
+
+                        <!-- Parent Tol -->
+                        <div class="row mb-3 align-items-center">
+                            <label class="col-5 col-form-label text-end">Parent Ion m/z Tol ±:</label>
+                            <div class="col-5">
+                                <input type="text" name="parent_tol" class="form-control" placeholder="e.g. 0.1">
+                            </div>
+                            <div class="col-2">
+                                <select name="parent_tol_unit" class="form-select">
+                                    <option value="Da">Da</option>
+                                    <option value="ppm">ppm</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- m/z Tol -->
+                        <div class="row mb-3 align-items-center">
+                            <label class="col-5 col-form-label text-end">m/z Tol ±:</label>
+                            <div class="col-5">
+                                <input type="text" name="mz_tol" class="form-control" placeholder="e.g. 0.1">
+                            </div>
+                            <div class="col-2">
+                                <select name="mz_tol_unit" class="form-select">
+                                    <option value="Da">Da</option>
+                                    <option value="ppm">ppm</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Ion mode -->
+                        <div class="row mb-3 align-items-center">
+                            <label class="col-5 col-form-label text-end">Ion Mode:</label>
+                            <div class="col-7">
+                                <select name="ion_mode" class="form-select">
+                                    <option value="positive">Positive</option>
+                                    <option value="negative">Negative</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            <button type="submit" class="btn btn-primary mt-3">Search</button>
+            <button type="reset" class="btn btn-secondary mt-3">Reset</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

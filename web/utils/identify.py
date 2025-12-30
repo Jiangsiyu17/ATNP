@@ -150,14 +150,39 @@ def find_most_similar_spectrum(spectrum, ionmode="positive", n_decimals=2):
         ref_spec = ref_entry["spectrum"]  # 此时已经是 Spectrum 对象
 
 
+        meta = ref_spec.metadata or {}
+
+        precursor_mz = (
+            meta.get("precursor_mz")
+            or meta.get("PRECURSOR_MZ")
+            or meta.get("pepmass")
+            or meta.get("PEPMASS")
+        )
+
+        try:
+            precursor_mz = round(float(precursor_mz), 4) if precursor_mz else None
+        except Exception:
+            precursor_mz = None
+
+        ionmode = (
+            meta.get("ionmode")
+            or meta.get("IONMODE")
+            or meta.get("polarity")
+            or "-"
+        )
+
         temp_results.append({
-            "herb_id": ref_spec.metadata.get("herb_id"),
-            "latin_name": ref_spec.metadata.get("latin_name"),
-            "chinese_name": ref_spec.metadata.get("chinese_name"),
-            "tissue": ref_spec.metadata.get("tissue"),
+            "herb_id": meta.get("herb_id"),
+            "latin_name": meta.get("latin_name"),
+            "chinese_name": meta.get("chinese_name"),
+            "tissue": meta.get("tissue"),
             "score": score,
-            "compound_name": ref_spec.metadata.get("compound_name", ""),
+            "compound_name": meta.get("compound_name", ""),
             "spectrum_index": idx,
+
+            # ✅ 关键新增（样本谱图）
+            "precursor_mz": precursor_mz,
+            "ionmode": ionmode,
         })
 
 
