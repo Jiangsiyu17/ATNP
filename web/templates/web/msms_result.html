@@ -30,7 +30,7 @@
       <td>{{ r.chinese_name }}</td>
       <td>{{ r.tissue }}</td>
       <td>{{ r.best_score }}</td>
-      <td><a href="{% url 'herb_detail' r.latin_name %}">View Details</a></td>
+      <td><a href="{% url 'herb_detail' r.latin_name %}" class="btn btn-sm btn-outline-primary">View</a></td>
     </tr>
     {% endfor %}
   </tbody>

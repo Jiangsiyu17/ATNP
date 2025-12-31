@@ -20,9 +20,9 @@
                 <tr>
                     <th style="min-width: 60px;">#</th>
                     <th style="min-width: 200px;">Compound name</th>
-                    <th style="min-width: 160px;">Precursor M/Z</th>
+                    <!-- <th style="min-width: 160px;">Precursor M/Z</th> -->
                     <th style="min-width: 160px;">Database</th>
-                    <th style="min-width: 120px;">Ionmode</th>
+                    <!-- <th style="min-width: 120px;">Ionmode</th> -->
                     <th style="min-width: 200px;">Smiles</th>
                     <th style="min-width: 120px;"></th>
                 </tr>
@@ -39,11 +39,11 @@
                         </a>
                     </td>
 
-                    <td>{{ compound.precursor_mz }}</td>
+                    <!-- <td>{{ compound.precursor_mz }}</td> -->
 
-                    <td>{{ compound.database }}</td>
+                    <td>{{ compound.database|upper }}</td>
 
-                    <td>{{ compound.ionmode }}</td>
+                    <!-- <td>{{ compound.ionmode }}</td> -->
 
                     <td style="font-family: monospace; font-size: 0.85em;">
                         {{ compound.smiles }}
