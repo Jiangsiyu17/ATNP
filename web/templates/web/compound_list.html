@@ -86,9 +86,7 @@
                 {% for compound in compounds %}
                 <tr>
                     <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
-                    <td><a href="{% url 'compound_detail' compound.first_id %}" class="text-decoration-none">
-                        {{compound.standard }}</a>
-                    </td>
+                    <td>{{compound.standard }}</td>
                     <td>{{ compound.database }}</td>
                     <td style="font-family: monospace; font-size: 0.85em;">{{ compound.smiles }}</td>
                     <td><a href="{% url 'compound_detail' compound.first_id %}" class="btn btn-sm btn-outline-primary">View</a></td>

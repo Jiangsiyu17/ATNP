@@ -127,75 +127,107 @@ def compound_list(request):
 
 
 def herb_list(request):
-    query        = request.GET.get("query", "")
-    search_field = request.GET.get("field", "latin_name")
+    query = request.GET.get("query", "").strip()
 
-    base = (CompoundLibrary.objects
-            .exclude(latin_name__isnull=True)      
-            .exclude(latin_name=""))
+    # 1️⃣ 只取【标品库 + 有 plants 的记录】
+    qs = (
+        CompoundLibrary.objects
+        .filter(spectrum_type="standard")
+        .exclude(plants__isnull=True)
+        .exclude(plants=[])
+        .values("plants")
+    )
 
-    if query:
-        lookups = {
-            "latin_name":   Q(latin_name__icontains=query),
-            "chinese_name": Q(chinese_name__icontains=query),
-            "pinyin":       Q(herb_pinyin__icontains=query),
-        }
-        base = base.filter(lookups.get(search_field, Q()))
+    # 2️⃣ 聚合：latin_name → tissues
+    herb_map = {}  # latin_name -> {"chinese_name": ..., "tissues": set()}
 
-    # 把所有需要的字段都拿出来
-    qs = (base
-          .annotate(latin_lower=Lower("latin_name"))
-          .values("latin_lower", "latin_name", "chinese_name", "tissue")
-          .order_by("latin_lower", "tissue"))
+    for row in qs:
+        for p in row["plants"]:
+            latin = p.get("latin_name")
+            chinese = p.get("chinese_name")
+            tissue = p.get("tissue")
 
+            if not latin:
+                continue
+
+            # 搜索（只在植物名层面）
+            if query and query.lower() not in latin.lower():
+                continue
+
+            if latin not in herb_map:
+                herb_map[latin] = {
+                    "latin_name": latin,
+                    "chinese_name": chinese,
+                    "tissues": set(),
+                }
+
+            if tissue:
+                herb_map[latin]["tissues"].add(tissue)
+
+    # 3️⃣ 转为模板可用列表
     rows = []
-    for latin, group in itertools.groupby(qs, key=lambda x: x["latin_lower"]):
-        group_list = list(group)
-        first      = group_list[0]
-        tissues    = sorted({g["tissue"] for g in group_list if g["tissue"]})
+    for herb in herb_map.values():
         rows.append({
-            "latin_lower": latin,                        # ★ 模板用来反向解析
-            "latin_name":  format_latin_name(first["latin_name"]),          # 备用，如需展示
-            "chinese_name": first["chinese_name"],
-            "tissue":      ", ".join(tissues) or "-",    # ★ 模板列名保持一致
+            "latin_name": herb["latin_name"],
+            "latin_lower": herb["latin_name"].lower(),
+            "chinese_name": herb["chinese_name"] or "-",
+            "tissue": ", ".join(sorted(herb["tissues"])) or "-",
         })
 
+    # 4️⃣ 排序
+    rows.sort(key=lambda x: x["latin_lower"])
+
+    # 5️⃣ 分页
     paginator = Paginator(rows, 20)
-    page_obj  = paginator.get_page(request.GET.get("page"))
+    page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(request, "web/herb_list.html", {
         "page_obj": page_obj,
-        "herbs":    page_obj.object_list,
-        "query":    query,
-        "field":    search_field,
+        "herbs": page_obj.object_list,
+        "query": query,
         "no_result": query and paginator.count == 0,
     })
 
+
 def herb_detail(request, latin_name):
-    compounds = CompoundLibrary.objects.filter(
-        latin_name__iexact=latin_name
-    ).order_by(Lower("standard"))
+    """
+    展示所有 plants 中包含该植物的化合物
+    """
+    qs = (
+        CompoundLibrary.objects
+        .filter(spectrum_type="standard")
+        .exclude(plants__isnull=True)
+        .exclude(plants=[])
+        .order_by(Lower("standard"))
+    )
 
     rows = []
-    for c in compounds:
 
-        # ========= 处理 precursor_mz，与 compound_list 完全一致 =========
+    for c in qs:
+        matched = False
+        for p in c.plants:
+            if p.get("latin_name", "").lower() == latin_name.lower():
+                matched = True
+                break
+
+        if not matched:
+            continue
+
+        # ===== precursor_mz =====
         if c.precursor_mz:
             precursor = f"{c.precursor_mz:.4f}"
         elif c.pepmass:
             try:
                 mz_value = float(c.pepmass.split()[0])
                 precursor = f"{mz_value:.4f}"
-            except:
+            except Exception:
                 precursor = c.pepmass
         else:
             precursor = "-"
 
-        # ========= database 标准化 =========
+        # ===== database =====
         if c.database:
-            db = c.database.lower()
-            db = db.replace("nist20", "nist")
-            db = db.lower()
+            db = c.database.lower().replace("nist20", "nist")
         else:
             db = "-"
 
@@ -208,9 +240,14 @@ def herb_detail(request, latin_name):
             "smiles": c.smiles or "-",
         })
 
-    return render(request, 'web/herb_detail.html', {
-        'latin_name': latin_name,
-        'compounds': rows,
+    # ✅ 分页：每页 20 条
+    paginator = Paginator(rows, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(request, "web/herb_detail.html", {
+        "latin_name": latin_name,
+        "compounds": page_obj.object_list,
+        "page_obj": page_obj,
     })
 
 

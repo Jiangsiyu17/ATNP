@@ -79,16 +79,12 @@
             <tbody>
                 {% for herb in herbs %}
                 <tr>
-                    <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
-                    <td>
-                        <a href="{% url 'herb_detail' herb.latin_lower %}" class="text-decoration-none">
-                            {{ herb.latin_name }}
-                        </a>
-                    </td>
+                    <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
+                    <td>{{ herb.latin_name }}</td>
                     <td>{{ herb.chinese_name }}</td>
                     <td>{{ herb.tissue }}</td>
                     <td>
-                        <a href="{% url 'herb_detail' herb.latin_lower %}" class="btn btn-sm btn-outline-primary">
+                        <a href="{% url 'herb_detail' herb.latin_name %}" class="btn btn-sm btn-outline-primary">
                             View
                         </a>
                     </td>

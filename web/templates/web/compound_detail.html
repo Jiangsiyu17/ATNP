@@ -224,12 +224,13 @@
   <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-4">
     <thead class="table-info">
       <tr class="table-info">
-          <th class="text-center fs-5 py-2" colspan="7">Plants Containing Similar Compounds</th>
+          <th class="text-center fs-5 py-2" colspan="8">Plants Containing Similar Compounds</th>
       </tr>      
     </thead>
       <tr class="table-secondary fw-bold">
-        <th>Latin Name</th>
+        <th>#</th>
         <th>Chinese Name</th>
+        <th>Latin Name</th>
         <th>Tissue</th>
         <th>Precursor m/z</th>
         <th>Ion mode</th>
@@ -239,8 +240,9 @@
     <tbody>
       {% for s in similar_samples.object_list %}
         <tr>
-          <td>{{ s.latin_name }}</td>
+          <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
           <td>{{ s.chinese_name }}</td>
+          <td>{{ s.latin_name }}</td>
           <td>{{ s.tissue }}</td>
           <td>{{ s.precursor_mz|floatformat:4 }}</td>
           <td>{{ s.ionmode }}</td>
