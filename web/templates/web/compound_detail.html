@@ -165,10 +165,11 @@
   <table class="table w-100 table-bordered table-hover mb-4">
     <thead class="table-info">
       <tr class="table-info">
-          <th class="text-center fs-5 py-2" colspan="6">Herb Sources</th>
+          <th class="text-center fs-5 py-2" colspan="7">Herb Sources</th>
       </tr>
     </thead>
       <tr class="table-secondary fw-bold">
+        <th>#</th>
         <th>Chinese Name</th>
         <th>Latin Name</th>
         <th>Tissue</th>
@@ -177,20 +178,46 @@
         <th></th>
       </tr>
     <tbody>
-      {% for ps in plant_sources %}
+      {% for ps in plant_sources.object_list %}
         <tr>
-            <td>{{ ps.chinese_name }}</td>
-            <td>{{ ps.latin_name }}</td>
-            <td>{{ ps.tissue }}</td>
-            <td>{{ ps.precursor_mz }}</td>
-            <td>{{ ps.ionmode }}</td>
-            <td><a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound=ps.compound_url %}?matched_id={{ ps.matched_id }}" class="btn btn-sm btn-outline-primary">View</a></td>
+          <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
+          <td>{{ ps.chinese_name }}</td>
+          <td>{{ ps.latin_name }}</td>
+          <td>{{ ps.tissue }}</td>
+          <td>{{ ps.precursor_mz|floatformat:4 }}</td>
+          <td>{{ ps.ionmode }}</td>
+          <td><a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound_id=compound.id %}?pid={{ ps.pid }}" class="btn btn-sm btn-outline-primary">View</a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="4" class="text-muted">No herb recorded for this compound.</td></tr>
+        <tr><td colspan="7" class="text-muted">No herb recorded for this compound.</td></tr>
       {% endfor %}
     </tbody>
-  </table>
+    </table>
+
+    <!-- herb_sources 分页 -->
+    <div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+      <div class="page_info">
+          Displaying <b>{{ plant_sources.start_index }} - {{ plant_sources.end_index }}</b> of <b>{{ plant_sources.paginator.count }}</b> in total
+      </div>
+      <ul class="pagination pagination-sm mb-0">
+          {% if plant_sources.has_previous %}
+          <li class="page-item"><a class="page-link" href="?plant_page={{ plant_sources.previous_page_number }}">‹ Prev</a></li>
+          {% endif %}
+
+          {% for num in plant_sources.paginator.page_range %}
+          {% if num >= plant_sources.number|add:"-2" and num <= plant_sources.number|add:"2" %}
+          <li class="page-item {% if num == plant_sources.number %}active{% endif %}">
+              <a class="page-link" href="?plant_page={{ num }}">{{ num }}</a>
+          </li>
+          {% endif %}
+          {% endfor %}
+
+          {% if plant_sources.has_next %}
+          <li class="page-item"><a class="page-link" href="?plant_page={{ plant_sources.next_page_number }}">Next ›</a></li>
+          {% endif %}
+      </ul>
+    </div>
+
 <br><br>
 
   {% if similar_samples %}
@@ -210,23 +237,46 @@
         <th></th>
       </tr>
     <tbody>
-        {% for item in similar_samples %}
-          <tr>
-            <td>{{ item.latin_name }}</td>
-            <td>{{ item.chinese_name }}</td>
-            <td>{{ item.tissue }}</td>
-            <td>{{ item.precursor_mz }}</td>
-            <td>{{ item.ionmode }}</td>
-            <td>{{ item.score|floatformat:3 }}</td>
-            <td><a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=item.spectrum_idx %}?score={{ item.score }}" class="btn btn-sm btn-outline-primary">View</a></td>
-          </tr>
-        {% endfor %}
+      {% for s in similar_samples.object_list %}
+        <tr>
+          <td>{{ s.latin_name }}</td>
+          <td>{{ s.chinese_name }}</td>
+          <td>{{ s.tissue }}</td>
+          <td>{{ s.precursor_mz|floatformat:4 }}</td>
+          <td>{{ s.ionmode }}</td>
+          <td>{{ s.score|floatformat:3 }}</td>
+          <td><a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}" class="btn btn-sm btn-outline-primary">View</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-muted">No similar samples found.</td></tr>
+      {% endfor %}
     </tbody>
-  </table>
+    </table>
+    {% endif %}
 
-  <!-- 分页信息和导航 -->
-  <div id="similar-pagination" class="pagination-holder d-flex justify-content-between align-items-center mt-3"></div>
-  {% endif %}
+    <!-- similar_samples 分页 -->
+    <div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+      <div class="page_info">
+          Displaying <b>{{ similar_samples.start_index }} - {{ similar_samples.end_index }}</b> of <b>{{ similar_samples.paginator.count }}</b> in total
+      </div>
+      <ul class="pagination pagination-sm mb-0">
+          {% if similar_samples.has_previous %}
+          <li class="page-item"><a class="page-link" href="?sample_page={{ similar_samples.previous_page_number }}">‹ Prev</a></li>
+          {% endif %}
+
+          {% for num in similar_samples.paginator.page_range %}
+          {% if num >= similar_samples.number|add:"-2" and num <= similar_samples.number|add:"2" %}
+          <li class="page-item {% if num == similar_samples.number %}active{% endif %}">
+              <a class="page-link" href="?sample_page={{ num }}">{{ num }}</a>
+          </li>
+          {% endif %}
+          {% endfor %}
+
+          {% if similar_samples.has_next %}
+          <li class="page-item"><a class="page-link" href="?sample_page={{ similar_samples.next_page_number }}">Next ›</a></li>
+          {% endif %}
+      </ul>
+    </div>
 
   <script>
   document.addEventListener("DOMContentLoaded", function() {

@@ -151,7 +151,7 @@ def generate_spectrum_comparison(entries, only_nist=False, min_score=0.0, standa
         # ---------- 取匹配 ID / score ----------
         matched_id_raw = getattr(sample, "matched_spectrum_id", None)
         matched_id = str(matched_id_raw).strip() if matched_id_raw else None
-        ionmode = (sample.ionmode or "").lower()
+        # ionmode = (sample.ionmode or "").lower()
         sample_score = getattr(sample, "score", 0.0) or 0.0
 
         if not matched_id or sample_score < min_score:

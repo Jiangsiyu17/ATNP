@@ -11,7 +11,7 @@ from urllib.parse import unquote
 from django.utils.text import slugify
 from collections import defaultdict
 import unicodedata
-from web.utils.plot_tools import plot_ref_mol
+from web.utils.plot_tools import plot_ref_mol, plot_single_spectrum
 import hashlib
 from web.utils.identify import identify_spectrums
 from urllib.parse import quote
@@ -269,11 +269,12 @@ from rdkit.Chem import Descriptors, Lipinski, Crippen, QED
 import rdkit.Chem.AllChem as AllChem
 from web.utils import sascorer
 
+from django.core.paginator import Paginator
+
 def compound_detail(request, pk):
     logger = logging.getLogger(__name__)
     logger.info(f"→ Enter compound_detail, pk={pk}")
 
-    # ===== 基本信息 =====
     compound = get_object_or_404(CompoundLibrary, pk=pk)
     mol_img = plot_ref_mol(compound.smiles) if compound.smiles else None
 
@@ -297,101 +298,51 @@ def compound_detail(request, pk):
             except Exception:
                 rdkit_props["sa_score"] = "N/A"
 
-    # =====================================================
-    # 表格 A：来源植物（从「样品库」反查真实谱图）
-    # =====================================================
+    # ===== 表格 A：plant_sources =====
     plant_sources = []
+    plants = compound.plants or []
+    if isinstance(plants, dict):
+        plants = list(plants.values())
+    for p in plants:
+        pid = p.get("pid")
+        chinese_name = p.get("chinese_name", "-")
+        latin_name = p.get("latin_name", "-")
+        tissue = p.get("tissue", "-")
+        matched_id = p.get("matched_spectrum_id")
+        raw_latin = latin_name if latin_name not in ("", "-", None) else None
+        latin_slug = slugify(raw_latin) if raw_latin else "unknown-plant"
+        precursor_mz = p.get("precursor_mz", "-")
+        ionmode = p.get("ionmode", "-")
+        plant_sources.append({
+            "pid": pid,
+            "chinese_name": chinese_name,
+            "latin_name": format_latin_name(latin_name),
+            "tissue": tissue.capitalize() if tissue != "-" else "-",
+            "matched_id": matched_id,
+            "latin_slug": latin_slug,
+            "precursor_mz": round(float(precursor_mz), 4) if precursor_mz not in ("-", None) else "-",
+            "ionmode": ionmode,
+        })
 
-    if compound.plants:
-        entries = re.findall(r"\[(P\d+:[^\]]+)\]", compound.plants)
-
-        for entry in entries:
-            chinese_name = re.search(r"Chinese_name=([^;]+)", entry)
-            latin_name = re.search(r"Latin_name=([^;]+)", entry)
-            tissue = re.search(r"Tissue=([^;]+)", entry)
-            matched_id = re.search(r"matched_spectrum_id=([0-9]+)", entry)
-
-            chinese_name = chinese_name.group(1).strip() if chinese_name else "-"
-            latin_name = latin_name.group(1).strip() if latin_name else "-"
-            tissue = tissue.group(1).strip() if tissue else "-"
-            matched_id = matched_id.group(1) if matched_id else None
-
-            # 默认值
-            precursor_mz = "-"
-            ionmode = "-"
-
-            # 🔥 核心：去「样品库」找谱图（不是标品库）
-            if matched_id:
-                sample_qs = CompoundLibrary.objects.filter(
-                    spectrum_type="sample",
-                    matched_spectrum_id=matched_id
-                )
-
-                if latin_name != "-":
-                    sample_qs = sample_qs.filter(latin_name__iexact=latin_name)
-                if tissue != "-":
-                    sample_qs = sample_qs.filter(tissue__iexact=tissue)
-
-                # ⚠ 不用 .get()，允许 POS / NEG 各一条
-                samples = sample_qs.all()
-
-                for sample in samples:
-                    mz = sample.precursor_mz or sample.pepmass
-                    if mz:
-                        precursor_mz = round(float(mz), 4)
-
-                    ionmode = sample.ionmode or "-"
-
-                    plant_sources.append({
-                        "chinese_name": chinese_name,
-                        "latin_name": format_latin_name(latin_name),
-                        "tissue": tissue.capitalize() if tissue != "-" else "-",
-                        "matched_id": matched_id,
-                        "latin_slug": slugify(latin_name),
-                        "compound_raw": compound.standard,
-                        "compound_url": quote(compound.standard, safe=""),
-                        "precursor_mz": precursor_mz,
-                        "ionmode": ionmode,
-                    })
-
-            else:
-                # 没 matched_id 的兜底展示
-                plant_sources.append({
-                    "chinese_name": chinese_name,
-                    "latin_name": format_latin_name(latin_name),
-                    "tissue": tissue.capitalize() if tissue != "-" else "-",
-                    "matched_id": None,
-                    "latin_slug": slugify(latin_name),
-                    "compound_raw": compound.standard,
-                    "compound_url": quote(compound.standard, safe=""),
-                    "precursor_mz": "-",
-                    "ionmode": "-",
-                })
-
-    # ===== 去重：中文名 + 拉丁名 + ionmode =====
+    # 去重
     uniq = {}
     for ps in plant_sources:
         key = (ps["chinese_name"], ps["latin_name"], ps["ionmode"])
         uniq[key] = ps
     plant_sources = list(uniq.values())
+    for ps in plant_sources:
+        if not ps.get("latin_slug"):
+            ps["latin_slug"] = "unknown-plant"
 
-    logger.info(f"✔ plant_sources final count = {len(plant_sources)}")
 
-    # =====================================================
-    # 表格 B：谱图相似来源（你原来的逻辑，未动）
-    # =====================================================
+    # ===== 表格 B：similar_samples =====
     similar_samples = []
-
     spectrum = compound.get_spectrum()
     if spectrum:
         intensities = spectrum.intensities
         if intensities.max() > 0:
             intensities = intensities / intensities.max()
-        spectrum = Spectrum(
-            mz=spectrum.mz,
-            intensities=intensities,
-            metadata=spectrum.metadata
-        )
+        spectrum = Spectrum(mz=spectrum.mz, intensities=intensities, metadata=spectrum.metadata)
 
         raw_results = identify_spectrums([spectrum])
         filtered = [r for r in raw_results if r.get("score", 0) > 0.6]
@@ -421,13 +372,16 @@ def compound_detail(request, pk):
             for r in sorted(best.values(), key=lambda x: x["score"], reverse=True)
         ]
 
-    # ===== 渲染 =====
+    # ===== 分页处理 =====
+    plant_page = Paginator(plant_sources, 10).get_page(request.GET.get("plant_page"))
+    sample_page = Paginator(similar_samples, 10).get_page(request.GET.get("sample_page"))
+
     return render(request, "web/compound_detail.html", {
         "compound": compound,
         "mol_img": mol_img,
         "rdkit": rdkit_props,
-        "plant_sources": plant_sources,      # 表格 A（双离子模式）
-        "similar_samples": similar_samples,  # 表格 B
+        "plant_sources": plant_page,      # 已分页
+        "similar_samples": sample_page,   # 已分页
     })
 
 
@@ -436,92 +390,120 @@ def make_cache_key(prefix, latin_name, compound):
     key_hash = hashlib.md5(raw_key.encode('utf-8')).hexdigest()
     return f"{prefix}_{key_hash}"
 
-def herb_compound_detail(request, latin_name, compound):
-    from urllib.parse import unquote
-    from django.utils.text import slugify
-    from web.models import CompoundLibrary
-    from web.utils.plotting import generate_spectrum_comparison
 
-    import pickle
+from django.shortcuts import render, get_object_or_404
+from django.http import Http404
+from matchms import Spectrum
+from web.utils.plotting import plot_2_spectrum, format_latin_name
+from django.utils.text import slugify
+from urllib.parse import unquote
+import numpy as np
 
-    def normalize_name(name):
-        if not name:
-            return ""
-        # 把特殊字符 × 去掉
-        name = name.replace("×", " ")
-        # 标准化多个空格
-        return " ".join(name.split()).strip().lower()
+def herb_compound_detail(request, latin_name, compound_id):
+    """
+    只展示【某一个植物(pid)】与【当前化合物】的谱图对比
+    """
 
-    latin_name = unquote(latin_name)
-    compound = unquote(compound)
-    matched_id = request.GET.get("matched_id")
+    # Step 0：获取 pid
+    pid = request.GET.get("pid")
+    if not pid:
+        raise Http404("pid is required")
 
-    # ---- Step 1: 找真实拉丁名（normalize + slugify）----
-    real_latin_name = None
-    all_names = CompoundLibrary.objects.values_list("latin_name", flat=True).distinct()
-
-    for name in all_names:
-        if slugify(normalize_name(name)) == latin_name:
-            real_latin_name = name
-            break
-
-    # ---- Step 2: 查询 normalize 后完全一致的样品 ----
-    norm_real = normalize_name(real_latin_name)
-
-    all_entries = CompoundLibrary.objects.filter(
-        matched_spectrum_id=matched_id,
-        spectrum_type="sample"
+    # Step 1：获取化合物对象
+    compound_obj = get_object_or_404(
+        CompoundLibrary,
+        pk=compound_id
     )
 
-    entries = []
-    for e in all_entries:
-        if normalize_name(e.latin_name) == norm_real:
-            spectrum = pickle.loads(e.spectrum_blob)
-            spectrum.metadata["db_id"] = e.id
-            spectrum.db_id = e.id
-            e.spectrum = spectrum
-            entries.append(e)
+    # ✅ 从对象里取化合物名称
+    compound_name = compound_obj.standard
 
-    # ---- Step 3: 查标品 ----
-    standard = CompoundLibrary.objects.filter(
-        standard_id=matched_id,
-        spectrum_type="standard"
-    ).first()
+    # ------------------------------------------------
+    # Step 2：定位对应 pid 的植物
+    # ------------------------------------------------
+    plants = compound_obj.plants or []
+    if isinstance(plants, dict):
+        plants = list(plants.values())
 
-    # ---- Step 4: 图像比对 ----
-    comparison_list = []
-    matched_ids = []
+    plant = next((p for p in plants if p.get("pid") == pid), None)
+    if not plant:
+        raise Http404(f"Plant with pid={pid} not found")
 
-    if entries and standard:
-        std_db = (standard.database or "").lower()
-        is_nist = "nist" in std_db
+    # ------------------------------------------------
+    # Step 3：构建「样品谱图」Spectrum（来自 plants）
+    # ------------------------------------------------
+    peaks = plant.get("peaks") or []
+    if not peaks:
+        raise Http404("Plant spectrum peaks empty")
 
-        if is_nist:
-            comparison_list = generate_spectrum_comparison(entries, standards=None)
-            matched_ids = [e.id for e in entries]
+    mzs = np.array([m for m, i in peaks], dtype=float)
+    intensities = np.array([i for m, i in peaks], dtype=float)
+    if intensities.max() > 0:
+        intensities = intensities / intensities.max()
+
+    sample_spec = Spectrum(
+        mz=mzs,
+        intensities=intensities,
+        metadata={
+            "ionmode": plant.get("ionmode"),
+            "precursor_mz": plant.get("precursor_mz"),
+            "pid": pid,
+            "latin_name": plant.get("latin_name"),
+            "chinese_name": plant.get("chinese_name"),
+            "tissue": plant.get("tissue"),
+        }
+    )
+
+    # ------------------------------------------------
+    # Step 4 & 5：根据 database 判断是否画标准品谱图
+    # ------------------------------------------------
+    dbs = (compound_obj.database or "").lower().split()
+    nist_like = {"nist", "nist20"}
+    is_nist_only = all(db in nist_like for db in dbs)
+
+    try:
+        if is_nist_only:
+            # 只画植物谱图，不画标准品
+            img_base64 = plot_single_spectrum(sample_spec)
         else:
-            comparison_list = generate_spectrum_comparison(entries, standards=[standard])
-            matched_ids = [c["sample"].id for c in comparison_list]
+            # 植物 + 标准品谱图对比
+            standard_spec = compound_obj.get_spectrum()
+            if standard_spec is None:
+                raise Http404("Standard spectrum not found")
+            img_base64 = plot_2_spectrum(sample_spec, standard_spec)
+    except Exception as e:
+        raise RuntimeError(f"Spectrum plotting failed: {e}")
 
-    # ---- Debug ----
-    print(f"[DEBUG] latin_name={latin_name}, real_latin_name={real_latin_name}, matched_id={matched_id}")
-    print(f"[DEBUG] sample count={len(entries)}")
-    print(f"[DEBUG] standard found={bool(standard)}")
-    print("[DEBUG] candidates len =", len([standard] if standard else []))
 
+    # ------------------------------------------------
+    # Step 6：组织模板需要的数据结构
+    # ------------------------------------------------
+    entry = {
+        "id": pid,
+        "chinese_name": plant.get("chinese_name", "-"),
+        "latin_name": format_latin_name(plant.get("latin_name", "-")),
+        "tissue": plant.get("tissue", "-"),
+        "score": plant.get("score", 0.0),
+    }
+
+    comparison_list = [{"sample": entry, "image": img_base64}]
+    matched_ids = [pid]
+
+    # ------------------------------------------------
+    # Step 7：渲染模板
+    # ------------------------------------------------
     return render(request, "web/herb_compound_detail.html", {
-        "latin_name": real_latin_name or latin_name,
-        "compound": compound,
-        "entries": entries,
+        "compound": compound_name,  # ✅ 显示化合物名称
+        "latin_name": format_latin_name(plant.get("latin_name", "")),
+        "entries": [entry],
         "comparison_list": comparison_list,
         "matched_ids": matched_ids,
     })
 
 
-
 # 植物谱图pickle路径
-HERB_SPECTRA_POS = "/data2/jiangsiyu/ATNP_Database/model_copy/herbs_spectra_pos.pickle"
-HERB_SPECTRA_NEG = "/data2/jiangsiyu/ATNP_Database/model_copy/herbs_spectra_neg.pickle"
+HERB_SPECTRA_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_1.pickle"
+HERB_SPECTRA_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_1.pickle"
 
 # 缓存pickle避免重复加载
 _herb_spectra_cache = {"pos": None, "neg": None}
@@ -535,10 +517,9 @@ def load_herb_spectra(ionmode="positive"):
             _herb_spectra_cache[key] = pickle.load(f)
     return _herb_spectra_cache[key]
 
-
-from web.utils.identify import load_models_and_indexes
-from web.utils.plot_tools import plot_2_spectrum
-
+from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse
+from web.models import CompoundLibrary
 
 def similar_compare(request, compound_id, spectrum_idx):
     compound_obj = get_object_or_404(CompoundLibrary, pk=compound_id)
@@ -548,49 +529,48 @@ def similar_compare(request, compound_id, spectrum_idx):
     if ref_spectrum is None:
         return HttpResponse("❌ No spectrum found for this compound", status=404)
 
-    # === 加载模型和谱图库 ===
-    load_models_and_indexes()
+    # === 离子模式 ===
     ionmode = (compound_obj.ionmode or "positive").lower()
     mode = "pos" if ionmode.startswith("pos") else "neg"
 
-    from web.utils.identify import _refs
-    all_spectra = _refs.get(mode, [])
+    from web.utils import identify
+
+    # ✅ 正确触发 lazy load
+    all_spectra = identify.get_refs(mode)
+
+    if not all_spectra:
+        return HttpResponse("❌ No reference spectra loaded", status=500)
 
     # === 取植物谱图 ===
     try:
         sample_entry = all_spectra[spectrum_idx]
     except IndexError:
         return HttpResponse("❌ Invalid spectrum index", status=404)
-    
-    from web.utils.identify import dict_to_spectrum
 
-    # ✅ 兼容结构（dict or Spectrum）
+    # === 转 Spectrum（兼容 dict / Spectrum）===
     if isinstance(sample_entry, dict):
-        sample_spectrum = sample_entry.get("spectrum", sample_entry)
+        sample_spectrum = sample_entry.get("spectrum")
     else:
         sample_spectrum = sample_entry
 
-    # 如果 spectrum 是字符串或非法结构，也安全转换
-    if isinstance(sample_spectrum, str) or not hasattr(sample_spectrum, "peaks"):
-        sample_spectrum = dict_to_spectrum(sample_entry)
+    if not hasattr(sample_spectrum, "peaks"):
+        sample_spectrum = identify.dict_to_spectrum(sample_entry)
 
     # === 生成对比图 ===
-    comparison_plot = None
     try:
         from web.utils.plot_tools import plot_2_spectrum
         comparison_plot = plot_2_spectrum(ref_spectrum, sample_spectrum)
     except Exception as e:
-        print("⚠ Plotting error:", e)
+        logger.exception("Plotting error")
         return HttpResponse(f"⚠ Error while plotting: {e}", status=500)
 
-    # === 相似度参数 ===
-    similarity = request.GET.get("score", "0")
+    # === 相似度 ===
     try:
-        similarity = float(similarity)
+        similarity = float(request.GET.get("score", 0))
     except ValueError:
         similarity = 0.0
 
-    # === 提取植物信息 ===
+    # === 元信息 ===
     meta = getattr(sample_spectrum, "metadata", {})
     if not meta and isinstance(sample_entry, dict):
         meta = sample_entry.get("metadata", {})
@@ -607,7 +587,6 @@ def similar_compare(request, compound_id, spectrum_idx):
         "sample": sample_info,
         "comparison_plot": comparison_plot,
     })
-
 
 def structure_query(request):
     return render(request, "web/structure_query.html")
@@ -765,6 +744,7 @@ from django.db.models import Q
 from django.db.models.functions import Lower
 
 
+
 def molecular_weight_search(request):
     if request.method == "POST":
         min_mw = request.POST.get("min_mw", "").strip()
@@ -778,22 +758,55 @@ def molecular_weight_search(request):
                 "error": "Invalid number input."
             })
 
+        # ======================================================
+        # 1️⃣ 先取候选标准品（不在 ORM 里算分子量）
+        # ======================================================
         qs = CompoundLibrary.objects.filter(
             spectrum_type__iexact="standard"
-        ).filter(
-            ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
         ).exclude(
             smiles__isnull=True
         ).exclude(
             smiles=""
         )
 
-        if min_mw is not None:
-            qs = qs.filter(precursor_mz__gte=min_mw)
-        if max_mw is not None:
-            qs = qs.filter(precursor_mz__lte=max_mw)
+        matched_ids = []
+        mw_cache = {}   # id -> molecular weight（可选，用于调试或展示）
 
-        results = aggregate_by_inchikey(qs)
+        # ======================================================
+        # 2️⃣ Python 层用 RDKit 计算分子量并筛选
+        # ======================================================
+        for obj in qs.iterator():
+            try:
+                mol = Chem.MolFromSmiles(obj.smiles)
+                if mol is None:
+                    continue
+
+                mw = Descriptors.ExactMolWt(mol)
+                mw_cache[obj.id] = mw
+
+                if min_mw is not None and mw < min_mw:
+                    continue
+                if max_mw is not None and mw > max_mw:
+                    continue
+
+                matched_ids.append(obj.id)
+
+            except Exception:
+                continue
+
+        if not matched_ids:
+            return render(request, "web/molecular_weight_results.html", {
+                "results": [],
+                "min_mw": min_mw,
+                "max_mw": max_mw,
+                "error": "No compounds found in the given molecular weight range."
+            })
+
+        # ======================================================
+        # 3️⃣ 再用 ORM 取回 + 按 InChIKey 聚合
+        # ======================================================
+        final_qs = CompoundLibrary.objects.filter(id__in=matched_ids)
+        results = aggregate_by_inchikey(final_qs)
 
         return render(request, "web/molecular_weight_results.html", {
             "results": results,
@@ -855,83 +868,104 @@ def msms_result(request):
         if parent_mz:
             metadata["precursor_mz"] = float(parent_mz)
 
-        spectrum = Spectrum(mz=mzs, intensities=intensities, metadata=metadata)
+        spectrum = Spectrum(
+            mz=mzs,
+            intensities=intensities,
+            metadata=metadata
+        )
 
         spectrum = normalize_intensities(spectrum)
         spectrum = select_by_mz(spectrum, mz_from=50, mz_to=2000)
-        spectrum = require_minimum_number_of_peaks(spectrum, n_required=3)
+        spectrum = require_minimum_number_of_peaks(
+            spectrum, n_required=3
+        )
 
         if spectrum is None:
             raise ValueError("Spectrum discarded after preprocessing.")
 
     except Exception as e:
         return render(request, "web/msms_result.html", {
+            "results": [],
             "error": f"MS/MS spectrum parsing error: {e}"
         })
 
     # ======================================================
-    # 2️⃣ 谱图搜索（植物样本库）
+    # 2️⃣ 谱图搜索（标准品库）
     # ======================================================
     raw_results = identify_spectrums([spectrum])
-    filtered = [r for r in raw_results if r.get("score", 0) >= 0.6]
+    filtered = [
+        r for r in raw_results
+        if r.get("score", 0) >= 0.6
+    ]
 
     if not filtered:
         return render(request, "web/msms_result.html", {
             "results": [],
-            "error": "No matched plant spectra found."
+            "error": "No matched standard spectra found."
         })
 
     # ======================================================
-    # 3️⃣ ORM 顺序必须和建模一致（sample）
+    # 3️⃣ ORM 顺序必须与建模一致（standard）
     # ======================================================
-    sample_qs = list(
+    standard_qs = list(
         CompoundLibrary.objects.filter(
-            spectrum_type="sample"
+            spectrum_type__iexact="standard"
         ).order_by("id")
     )
 
-    if not sample_qs:
+    if not standard_qs:
         return render(request, "web/msms_result.html", {
             "results": [],
-            "error": "Plant spectrum database is empty."
+            "error": "Standard spectrum database is empty."
         })
 
     # ======================================================
-    # 4️⃣ 聚合为「植物」维度
+    # 4️⃣ 按化合物聚合（类似 molecular_weight_search）
     # ======================================================
-    herb_map = {}
+    compound_map = {}
+
     for r in filtered:
         idx = r.get("spectrum_index")
         score = r.get("score", 0)
 
-        if idx is None or idx < 0 or idx >= len(sample_qs):
+        if idx is None or idx < 0 or idx >= len(standard_qs):
             continue
 
-        obj = sample_qs[idx]
-        key = (obj.latin_name, obj.chinese_name, obj.tissue)
+        obj = standard_qs[idx]
 
-        if key not in herb_map:
-            herb_map[key] = {
-                "latin_name": obj.latin_name,
-                "chinese_name": obj.chinese_name,
-                "tissue": obj.tissue,
-                "best_score": score
+        # 优先用 InChIKey 聚合
+        key = obj.inchikey or f"{obj.smiles}_{obj.precursor_mz}"
+
+        if key not in compound_map:
+            compound_map[key] = {
+                "id": obj.id,
+                "compound_name": obj.compound_name,
+                "smiles": obj.smiles,
+                "inchikey": obj.inchikey,
+                "precursor_mz": obj.precursor_mz,
+                "ionmode": obj.ionmode,
+                "database": obj.database,
+                "best_score": score,
             }
         else:
-            herb_map[key]["best_score"] = max(
-                herb_map[key]["best_score"], score
+            compound_map[key]["best_score"] = max(
+                compound_map[key]["best_score"],
+                score
             )
 
     results = sorted(
-        herb_map.values(),
+        compound_map.values(),
         key=lambda x: x["best_score"],
         reverse=True
     )
 
     for r in results:
         r["best_score"] = f"{r['best_score']:.4f}"
+        if r["precursor_mz"]:
+            r["precursor_mz"] = f"{r['precursor_mz']:.4f}"
 
     return render(request, "web/msms_result.html", {
         "results": results,
         "error": None
     })
+

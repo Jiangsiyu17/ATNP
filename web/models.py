@@ -57,7 +57,7 @@ class CompoundLibrary(models.Model):
 
     # ─── 新增：植物来源信息 ───────────────────────
     # 用于保存匹配到该标品的植物样品来源信息（字符串格式）
-    plants = models.TextField(blank=True, null=True)
+    plants = models.JSONField(null=True, blank=True)
 
     class Meta:
         indexes = [

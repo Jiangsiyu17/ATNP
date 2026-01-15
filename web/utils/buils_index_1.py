@@ -23,10 +23,10 @@ PLANT_POS_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/pos"
 PLANT_NEG_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/neg"
 MODEL_POS = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5"
 MODEL_NEG = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5"
-OUT_PICKLE_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos.pickle"
-OUT_PICKLE_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg.pickle"
-OUT_INDEX_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos.bin"
-OUT_INDEX_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg.bin"
+OUT_PICKLE_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_1.pickle"
+OUT_PICKLE_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_1.pickle"
+OUT_INDEX_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_1.bin"
+OUT_INDEX_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_1.bin"
 
 # ---------------- 多进程全局模型 ----------------
 model = None

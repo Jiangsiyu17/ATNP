@@ -11,7 +11,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
 
-    re_path(r"^herb/(?P<latin_name>[^/]+)/(?P<compound>[^/]+)/$",
+    re_path(r"^herb/(?P<latin_name>[^/]+)/(?P<compound_id>[^/]+)/$",
             views.herb_compound_detail, name="herb_compound_detail"),
 
     path("similar/<int:compound_id>/<int:spectrum_idx>/",
