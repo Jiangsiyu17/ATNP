@@ -16,51 +16,32 @@
     <table class="table w-100 table-striped table-bordered table-hover align-middle">
         <thead class="table-light">
             <tr>
+                <th style="min-width: 60px;">#</th>
                 <th style="min-width: 110px;">Similarity</th>
-                <th style="min-width: 90px;">Detail</th>
                 <th style="min-width: 220px;">Compound Name</th>
                 <th style="min-width: 220px;">SMILES</th>
                 <th style="min-width: 160px;">Database</th>
+                <th style="min-width: 90px;">Detail</th>
             </tr>
         </thead>
 
         <tbody>
             {% for r in results %}
             <tr>
-                {# Similarity #}
+                <td>{{ forloop.counter }}</td>
                 <td>{{ r.similarity }}</td>
-
-                {# Detail page #}
-                <td class="text-center">
-                    <a href="{% url 'compound_detail' r.first_id %}"
-                       class="btn btn-sm btn-outline-primary">
-                        View
-                    </a>
-                </td>
-
-                {# Compound Name #}
-                <td>
-                    <a href="{% url 'compound_detail' r.first_id %}"
-                       class="text-decoration-none">
-                        {{ r.compound_name }}
-                    </a>
-                </td>
-
-                {# Smiles #}
-                <td style="font-family: monospace; font-size: 0.85em;">
-                    {{ r.smiles|default:"-" }}
-                </td>
-
-                {# Database #}
+                <td> {{ r.compound_name }}</td>
+                <td style="font-family: monospace; font-size: 0.85em;">{{ r.smiles|default:"-" }}</td>
                 <td>{{ r.database|default:"-" }}</td>
+                <td class="text-center">
+                    <a href="{% url 'compound_detail' r.first_id %}" class="btn btn-sm btn-outline-primary">View</a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
-
     </table>
 
 </div>
-
 {% else %}
 <p class="text-danger mt-4">No similar compounds found.</p>
 {% endif %}

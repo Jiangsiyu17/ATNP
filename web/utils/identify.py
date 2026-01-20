@@ -174,7 +174,13 @@ def find_most_similar_spectrum(spectrum, ionmode="positive", n_decimals=2):
 
     results = []
     for idx, dist in zip(idxs[0], distances[0]):
-        score = round(1.0 - dist / 2.0, 5)
+        ref_vec = hnsw.get_items([idx])[0]
+        ref_vec = ref_vec / np.linalg.norm(ref_vec)
+
+        cosine = float(np.dot(xq[0], ref_vec))
+
+        score = round(cosine, 5)
+
         if score <= 0.6:
             continue
 
@@ -188,9 +194,13 @@ def find_most_similar_spectrum(spectrum, ionmode="positive", n_decimals=2):
             or meta.get("PEPMASS")
         )
         try:
-            precursor_mz = round(float(precursor_mz), 4) if precursor_mz else None
+            query_precursor = float(query_precursor) if query_precursor else None
         except Exception:
-            precursor_mz = None
+            query_precursor = None
+
+        if query_precursor is not None and precursor_mz is not None:
+            if abs(precursor_mz - query_precursor) > 0.02:
+                continue        
 
         results.append({
             "herb_id": meta.get("herb_id"),

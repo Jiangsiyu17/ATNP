@@ -28,6 +28,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit import DataStructs
 import warnings
+from django.db.models import Min
 
 
 def _fallback_mz(pepmass):
@@ -52,14 +53,13 @@ def compound_list(request):
     query = request.GET.get("query", "")
     field = request.GET.get("field", "standard")
 
-    # 只显示有 PLANTS 字段的标品谱图
-    qs = CompoundLibrary.objects.filter(
-        spectrum_type__iexact="standard"
-    ).filter(
-        ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
+    base_qs = (
+        CompoundLibrary.objects
+        .filter(spectrum_type__iexact="standard")
+        .exclude(plants__isnull=True)
+        .exclude(plants=[])
     )
 
-    # 支持搜索
     if query:
         lookups = {
             "standard": Q(standard__icontains=query),
@@ -67,57 +67,52 @@ def compound_list(request):
             "database": Q(database__icontains=query),
             "smiles": Q(smiles__icontains=query),
         }
-        qs = qs.filter(lookups.get(field, Q()))
+        base_qs = base_qs.filter(lookups.get(field, Q()))
 
-    # 提取字段
-    raw = qs.values("id", "standard", "precursor_mz", "database", "smiles", "pepmass", "plants", "ionmode") \
-            .order_by(Lower("standard"))
+    qs = (
+        base_qs
+        .values("standard")
+        .annotate(
+            first_id=Min("id"),
+            smiles=Min("smiles"),
+        )
+        .order_by(Lower("standard"))
+    )
 
-    # 只按 standard 去重
-    rows_dict = defaultdict(lambda: {
-        "standard": None,
-        "first_id": None,
-        "precursor_mz": None,
-        "smiles": None,
-        "databases": set(),
-        "plants": None,
-    })
-
-    for item in raw:
-        key = (_canon(item["standard"]))
-        r = rows_dict[key]
-
-        if r["standard"] is None:
-            r["standard"] = item["standard"] or "(unknown)"
-            r["first_id"] = item["id"]
-            r["precursor_mz"] = item["precursor_mz"] or _fallback_mz(item["pepmass"])
-            r["smiles"] = item["smiles"]
-            r["plants"] = item.get("plants")
-
-        if item["database"]:
-            normalized_db = _canon(item["database"])
-            if normalized_db in {"nist20", "nist"}:
-                r["databases"].add("NIST")
-            else:
-                r["databases"].add(normalized_db.upper())
-
-    # 转换为列表
-    rows = [{
-        "standard": r["standard"],
-        "first_id": r["first_id"],
-        "database": ", ".join(sorted(r["databases"])) or "-",
-        "smiles": r["smiles"],
-        "plants": r["plants"],
-    } for r in rows_dict.values()]
-
-    rows.sort(key=lambda x: _canon(x["standard"]))
-
-    # 分页
-    paginator = Paginator(rows, 20)
+    paginator = Paginator(qs, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    # ==== database 合并（只针对当前页）====
+    standards = [row["standard"] for row in page_obj]
+
+    db_map = defaultdict(set)
+    db_qs = (
+        CompoundLibrary.objects
+        .filter(standard__in=standards)
+        .values("standard", "database")
+    )
+
+    for row in db_qs:
+        if row["database"]:
+            db = row["database"].lower()
+            if db in {"nist20", "nist"}:
+                db_map[row["standard"]].add("NIST")
+            else:
+                db_map[row["standard"]].add(db.upper())
+
+    rows = []
+    for row in page_obj:
+        std = row["standard"]
+        rows.append({
+            "standard": std or "(unknown)",
+            "first_id": row["first_id"],
+            "smiles": row["smiles"],
+            "plants": None,
+            "database": ", ".join(sorted(db_map.get(std, []))) or "-",
+        })
+
     return render(request, "web/compound_list.html", {
-        "compounds": page_obj.object_list,
+        "compounds": rows,
         "page_obj": page_obj,
         "query": query,
         "field": field,
@@ -254,31 +249,67 @@ def herb_detail(request, latin_name):
 def home(request):
     return render(request, 'web/home.html')
 
+def get_full_compound_for_detail(queryset):
+    """
+    从 queryset 里选出一个 compound 对象，
+    并保证 plants 字段处理成列表、去重，和列表页点击一致。
+    """
+    for c in queryset:
+        plants = c.plants or []
+        if isinstance(plants, dict):
+            plants = list(plants.values())
+
+        # 去重
+        uniq = {}
+        for p in plants:
+            key = (p.get("chinese_name"), p.get("latin_name"), p.get("ionmode"))
+            uniq[key] = p
+        c.plants = list(uniq.values())
+        return c  # 返回处理后的对象
+    return None
+
 def search(request):
     query = request.GET.get("q", "").strip()
-
     if not query:
         return render(request, "search_not_found.html", {"query": query})
 
-    # 1. 搜化合物（用 standard/title/smiles）
-    compound = (CompoundLibrary.objects.filter(standard__icontains=query).first() or
-                CompoundLibrary.objects.filter(title__icontains=query).first() or
-                CompoundLibrary.objects.filter(smiles__icontains=query).first())
+    # ======================================================
+    # 1️⃣ 搜化合物（standard / title / smiles）
+    # ======================================================
+    qs = CompoundLibrary.objects.filter(
+        spectrum_type__iexact="standard"
+    ).filter(
+        Q(standard__icontains=query) |
+        Q(title__icontains=query) |
+        Q(smiles__icontains=query)
+    )
 
-    if compound:
-        return redirect(reverse("compound_detail", args=[compound.pk]))
+    if qs.exists():
+        compound = get_full_compound_for_detail(qs)
+        if compound:
+            return redirect(reverse("compound_detail", args=[compound.pk]))
 
-    # 2. 搜植物（用 latin_name 或 chinese_name）
-    herb = (CompoundLibrary.objects.filter(latin_name__icontains=query).first() or
-            CompoundLibrary.objects.filter(chinese_name__icontains=query).first())
+    # ======================================================
+    # 2️⃣ 搜植物（从 plants JSON 中找）
+    # ======================================================
+    qs = CompoundLibrary.objects.filter(
+        spectrum_type__iexact="standard"
+    ).exclude(plants__isnull=True).exclude(plants=[])
 
-    if herb:
-        # 注意：这里跳转 herb_detail，用 latin_name 作为参数
-        return redirect(reverse("herb_detail", args=[herb.latin_name]))
+    for obj in qs:
+        plants = obj.plants or []
+        if isinstance(plants, dict):
+            plants = list(plants.values())
+        for p in plants:
+            latin = p.get("latin_name", "")
+            chinese = p.get("chinese_name", "")
+            if (latin and query.lower() in latin.lower()) or (chinese and query in chinese):
+                return redirect(reverse("herb_detail", args=[latin]))
 
-    # 3. 都没找到
+    # ======================================================
+    # 3️⃣ 都没找到
+    # ======================================================
     return render(request, "search_not_found.html", {"query": query})
-
 
 def parse_plants_field(plants_field):
     """
@@ -389,7 +420,6 @@ def compound_detail(request, pk):
             key = (
                 r.get("latin_name"),
                 r.get("tissue"),
-                round(r.get("precursor_mz", 0), 4),
                 r.get("ionmode")
             )
             if key not in best or r["score"] > best[key]["score"]:
@@ -411,7 +441,9 @@ def compound_detail(request, pk):
 
     # ===== 分页处理 =====
     plant_page = Paginator(plant_sources, 10).get_page(request.GET.get("plant_page"))
-    sample_page = Paginator(similar_samples, 10).get_page(request.GET.get("sample_page"))
+
+    # ✅ 如果 similar_samples 不为空才分页，否则直接 None
+    sample_page = Paginator(similar_samples, 10).get_page(request.GET.get("sample_page")) if similar_samples else None
 
     return render(request, "web/compound_detail.html", {
         "compound": compound,
@@ -561,20 +593,14 @@ from web.models import CompoundLibrary
 def similar_compare(request, compound_id, spectrum_idx):
     compound_obj = get_object_or_404(CompoundLibrary, pk=compound_id)
 
-    # === 基准谱图 ===
-    ref_spectrum = compound_obj.get_spectrum()
-    if ref_spectrum is None:
-        return HttpResponse("❌ No spectrum found for this compound", status=404)
-
     # === 离子模式 ===
     ionmode = (compound_obj.ionmode or "positive").lower()
     mode = "pos" if ionmode.startswith("pos") else "neg"
 
     from web.utils import identify
 
-    # ✅ 正确触发 lazy load
+    # ✅ lazy load 植物谱图
     all_spectra = identify.get_refs(mode)
-
     if not all_spectra:
         return HttpResponse("❌ No reference spectra loaded", status=500)
 
@@ -593,10 +619,36 @@ def similar_compare(request, compound_id, spectrum_idx):
     if not hasattr(sample_spectrum, "peaks"):
         sample_spectrum = identify.dict_to_spectrum(sample_entry)
 
-    # === 生成对比图 ===
+    # ------------------------------------------------
+    # ✅ 判断是否 NIST-only
+    # ------------------------------------------------
+    dbs = (compound_obj.database or "").lower().split()
+    nist_like = {"nist", "nist20"}
+    is_nist_only = all(db in nist_like for db in dbs)
+
+    # ------------------------------------------------
+    # === 生成谱图 ===
+    # ------------------------------------------------
     try:
-        from web.utils.plot_tools import plot_2_spectrum
-        comparison_plot = plot_2_spectrum(ref_spectrum, sample_spectrum)
+        from web.utils.plot_tools import plot_2_spectrum, plot_single_spectrum
+
+        if is_nist_only:
+            # ✅ NIST：只画植物谱图
+            comparison_plot = plot_single_spectrum(
+                sample_spectrum,
+                # title="Plant sample spectrum"
+            )
+        else:
+            # ✅ 非 NIST：植物 vs 化合物
+            ref_spectrum = compound_obj.get_spectrum()
+            if ref_spectrum is None:
+                return HttpResponse("❌ No spectrum found for this compound", status=404)
+
+            comparison_plot = plot_2_spectrum(
+                ref_spectrum,
+                sample_spectrum
+            )
+
     except Exception as e:
         logger.exception("Plotting error")
         return HttpResponse(f"⚠ Error while plotting: {e}", status=500)
@@ -623,137 +675,100 @@ def similar_compare(request, compound_id, spectrum_idx):
         "compound": compound_obj,
         "sample": sample_info,
         "comparison_plot": comparison_plot,
+        "is_nist_only": is_nist_only,  # 👈 可选：模板里用
     })
 
 def structure_query(request):
     return render(request, "web/structure_query.html")
 
-from web.utils.compound_aggregate import aggregate_by_inchikey, smiles_to_inchikey
+from web.utils.compound_aggregate import aggregate_by_inchikey, smiles_to_inchikey, normalize_mol
+
 
 def structure_search(request):
-    if request.method == "POST":
-        smiles = request.POST.get("smiles", "").strip()
 
-        if not smiles:
-            return render(
-                request,
-                "web/structure_query.html",
-                {"error": "No structure provided."}
-            )
+    smiles = request.POST.get("smiles", "").strip()
 
-        # =========================================================
-        # 1️⃣ 解析并规范化查询结构
-        # =========================================================
-        mol_query = Chem.MolFromSmiles(smiles)
-        if mol_query is None:
-            return render(
-                request,
-                "web/structure_query.html",
-                {"error": "Invalid SMILES."}
-            )
+    debug = {
+        "input_smiles": smiles,
+        "valid_query": False,
+        "canonical_smiles": None,
+        "total_standard": 0,
+        "valid_smiles": 0,
+        "exact_hits": 0,
+        "max_similarity": 0.0,
+        "threshold": 0.3,
+    }
 
-        canonical_smiles = Chem.MolToSmiles(mol_query, canonical=True)
-        mol_query = Chem.MolFromSmiles(canonical_smiles)
-
-        # 查询 InChIKey（用于精确匹配）
-        try:
-            query_inchikey = Chem.inchi.MolToInchiKey(mol_query)
-        except Exception:
-            query_inchikey = None
-
-        # =========================================================
-        # 2️⃣ 计算查询指纹（用于相似度搜索）
-        # =========================================================
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            fp_query = AllChem.GetMorganFingerprintAsBitVect(
-                mol_query,
-                radius=2,
-                nBits=2048
-            )
-
-        # =========================================================
-        # 3️⃣ 查询候选标品
-        # =========================================================
-        qs = CompoundLibrary.objects.filter(
-            spectrum_type__iexact="standard"
-        ).filter(
-            ~Q(plants__isnull=True) & ~Q(plants__regex=r'^\s*$')
-        ).exclude(
-            smiles__isnull=True
-        ).exclude(
-            smiles=""
+    if not smiles:
+        return render(
+            request,
+            "web/structure_query.html",
+            {"error": "No structure provided."}
         )
 
-        # =========================================================
-        # 4️⃣ InChIKey 精确匹配（最高优先级）
-        # =========================================================
-        exact_hits = []
-        if query_inchikey:
-            for obj in qs:
-                try:
-                    if smiles_to_inchikey(obj.smiles) == query_inchikey:
-                        exact_hits.append(obj)
-                except Exception:
-                    continue
+    # =========================================================
+    # 1️⃣ 解析查询结构（⚠️ 不 normalize）
+    # =========================================================
+    mol_query = Chem.MolFromSmiles(smiles)
+    if mol_query is None:
+        return render(
+            request,
+            "web/structure_query.html",
+            {"error": "Invalid SMILES."}
+        )
 
-        if exact_hits:
-            results = aggregate_by_inchikey(exact_hits)
-            for r in results:
-                r["similarity"] = "1.000"
+    mol_query = normalize_mol(mol_query)  # ⭐ 关键
+    canonical_smiles = Chem.MolToSmiles(mol_query, canonical=True)
 
-            return render(
-                request,
-                "web/structure_results.html",
-                {
-                    "results": results,
-                    "query_smiles": canonical_smiles,
-                }
-            )
+    debug["valid_query"] = True
+    debug["canonical_smiles"] = canonical_smiles
 
-        # =========================================================
-        # 5️⃣ 指纹相似度搜索（兜底方案）
-        # =========================================================
-        SIM_THRESHOLD = 0.3   # ✅ 推荐：0.3–0.5，0.75 太严格
+    # 查询指纹（只算一次）
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fp_query = AllChem.GetMorganFingerprintAsBitVect(
+            mol_query, radius=2, nBits=2048
+        )
 
-        matched_objects = []
-        similarity_map = {}   # obj.id → max similarity
+    # 查询 InChIKey（只用于 exact match）
+    try:
+        query_inchikey = Chem.inchi.MolToInchiKey(mol_query)
+    except Exception:
+        query_inchikey = None
 
-        for obj in qs:
-            fp = obj.get_fingerprint()
-            if fp is None:
+    # =========================================================
+    # 2️⃣ 构建候选集（只取 standard）
+    # =========================================================
+    qs = CompoundLibrary.objects.filter(
+        spectrum_type__iexact="standard"
+    ).exclude(
+        smiles__isnull=True
+    ).exclude(
+        smiles=""
+    )
+
+    debug["total_standard"] = qs.count()
+    debug["valid_smiles"] = debug["total_standard"]
+
+    # =========================================================
+    # 3️⃣ InChIKey 精确匹配（最高优先级）
+    # =========================================================
+    exact_hits = []
+
+    if query_inchikey:
+        for obj in qs.iterator():
+            try:
+                if smiles_to_inchikey(obj.smiles) == query_inchikey:
+                    exact_hits.append(obj)
+            except Exception:
                 continue
 
-            sim = DataStructs.TanimotoSimilarity(fp_query, fp)
-            if sim >= SIM_THRESHOLD:
-                matched_objects.append(obj)
-                similarity_map[obj.id] = max(
-                    similarity_map.get(obj.id, 0),
-                    sim
-                )
+    debug["exact_hits"] = len(exact_hits)
 
-        if not matched_objects:
-            return render(
-                request,
-                "web/structure_results.html",
-                {
-                    "results": [],
-                    "query_smiles": canonical_smiles,
-                }
-            )
-
-        # =========================================================
-        # 6️⃣ InChIKey 统一聚合 + 相似度排序
-        # =========================================================
-        results = aggregate_by_inchikey(matched_objects)
-
+    if exact_hits:
+        results = aggregate_by_inchikey(exact_hits)
         for r in results:
-            r["similarity"] = f"{similarity_map.get(r['first_id'], 0):.3f}"
-
-        results.sort(
-            key=lambda x: float(x.get("similarity", 0)),
-            reverse=True
-        )
+            r["similarity"] = "1.000"
 
         return render(
             request,
@@ -764,7 +779,66 @@ def structure_search(request):
             }
         )
 
-    return render(request, "web/structure_query.html")
+    # =========================================================
+    # 4️⃣ Morgan 指纹相似度搜索（⚠️ 只用数据库指纹）
+    # =========================================================
+    SIM_THRESHOLD = 0.3
+
+    matched = []
+    similarity_map = {}
+    max_sim = 0.0
+
+    for obj in qs.iterator():
+        fp_db = obj.get_fingerprint()
+        if fp_db is None:
+            continue
+
+        sim = DataStructs.TanimotoSimilarity(fp_query, fp_db)
+        similarity_map[obj.id] = sim
+        max_sim = max(max_sim, sim)
+
+        if sim >= SIM_THRESHOLD:
+            matched.append(obj)
+
+    debug["max_similarity"] = round(max_sim, 3)
+
+    if not matched:
+        return render(
+            request,
+            "web/structure_results.html",
+            {
+                "results": [],
+                "query_smiles": canonical_smiles,
+                "debug": debug,
+            }
+        )
+
+    # =========================================================
+    # 5️⃣ InChIKey 聚合 + 取每组最高相似度
+    # =========================================================
+    results = aggregate_by_inchikey(matched)
+
+    for r in results:
+        sims = [
+            similarity_map[obj.id]
+            for obj in matched
+            if smiles_to_inchikey(obj.smiles) == r["inchikey"]
+        ]
+        r["similarity"] = f"{max(sims):.3f}" if sims else "0.000"
+
+    results.sort(
+        key=lambda x: float(x["similarity"]),
+        reverse=True
+    )
+
+    return render(
+        request,
+        "web/structure_results.html",
+        {
+            "results": results,
+            "query_smiles": canonical_smiles,
+        }
+    )
 
 def molecular_weight_query(request):
     """

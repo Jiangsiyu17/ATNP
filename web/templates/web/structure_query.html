@@ -43,7 +43,7 @@
 </script>
 
 <!-- ⭐ Search + Reset 按钮并排居中 ⭐ -->
-<form id="structureForm" action="{% url 'structure_query_result' %}" method="post">
+<form id="structureForm" action="{% url 'structure_result' %}" method="post">
     {% csrf_token %}
     <input type="hidden" name="smiles" id="id_smiles">
 

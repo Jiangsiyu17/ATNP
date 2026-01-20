@@ -2,38 +2,82 @@
 
 import json
 import numpy as np
+import pickle
 from django.db import models
 from matchms import Spectrum
-import pickle
-from rdkit import DataStructs
+from rdkit import Chem, DataStructs
+from rdkit.Chem import AllChem
+from web.utils.compound_aggregate import normalize_mol
 
 class CompoundLibrary(models.Model):
-    standard_id = models.CharField(max_length=50, null=True, blank=True)   # 标品的ID
-    matched_spectrum_id = models.CharField(max_length=50, null=True, blank=True)  # 样品对应的标品ID
+    # ─────────────────────────────
+    # 基础标识
+    # ─────────────────────────────
+    standard_id = models.CharField(max_length=50, null=True, blank=True)
+    matched_spectrum_id = models.CharField(max_length=50, null=True, blank=True)
 
-    # ─── 新增 title，用于匹配 ───────────────────────
-    title = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    title = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
 
-    # ─── SMILES 字段，去掉唯一约束和索引 ───
+    # ─────────────────────────────
+    # 结构相关
+    # ─────────────────────────────
     smiles = models.TextField(blank=True, null=True)
+
+    # ⚠️ 只存「最终 Morgan FP」，搜索时不再计算
     morgan_fp = models.BinaryField(blank=True, null=True)
 
     def get_fingerprint(self):
         """
-        从数据库中反序列化 Morgan FP
+        从数据库中反序列化 Morgan 指纹
         """
         if not self.morgan_fp:
             return None
         try:
+            # Django BinaryField 返回 bytes，可直接用
             return DataStructs.CreateFromBinaryText(self.morgan_fp)
         except Exception:
             return None
 
+    def recalc_fingerprint(self, save=True):
+        """
+        根据 smiles 重新计算 Morgan FP（normalize 后）
+        """
+        if not self.smiles:
+            self.morgan_fp = None
+            return None
 
-    # ─── 基本字段 ───────────────────────────────
+        mol = Chem.MolFromSmiles(self.smiles)
+        if mol is None:
+            self.morgan_fp = None
+            return None
+
+        mol = normalize_mol(mol)  # ⭐ 必须
+
+        fp = AllChem.GetMorganFingerprintAsBitVect(
+            mol, radius=2, nBits=2048
+        )
+
+        self.morgan_fp = DataStructs.BitVectToBinaryText(fp)
+
+        if save:
+            self.save(update_fields=["morgan_fp"])
+
+        return fp
+
+
+
+    # ─────────────────────────────
+    # 化合物注释信息
+    # ─────────────────────────────
     standard = models.TextField(blank=True, null=True)
-    chinese_name = models.CharField(max_length=255, blank=True, null=True, db_index=True)
-    latin_name = models.CharField(max_length=255, blank=True, null=True, db_index=True)
+    chinese_name = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
+    latin_name = models.CharField(
+        max_length=255, blank=True, null=True, db_index=True
+    )
     tissue = models.CharField(max_length=255, blank=True, null=True)
 
     precursor_mz = models.FloatField(blank=True, null=True)
@@ -44,43 +88,60 @@ class CompoundLibrary(models.Model):
     rtinseconds = models.FloatField(blank=True, null=True)
     pepmass = models.CharField(max_length=255, blank=True, null=True)
 
-    # ─── 谱图类型 ──────────────────────────────
+    # ─────────────────────────────
+    # 谱图类型
+    # ─────────────────────────────
     spectrum_type = models.CharField(
         max_length=16,
-        choices=[('sample', 'sample'), ('standard', 'standard')],
-        default='sample'
+        choices=[
+            ("sample", "sample"),
+            ("standard", "standard"),
+        ],
+        default="sample",
     )
 
-    # ─── 谱图数据 ──────────────────────────────
+    # ─────────────────────────────
+    # 谱图数据
+    # ─────────────────────────────
     spectrum_blob = models.BinaryField(blank=True, null=True)
     peaks = models.JSONField(blank=True, null=True)
 
-    # ─── 新增：植物来源信息 ───────────────────────
-    # 用于保存匹配到该标品的植物样品来源信息（字符串格式）
-    plants = models.JSONField(null=True, blank=True)
+    # 植物来源（结构搜索不参与）
+    plants = models.JSONField(blank=True, null=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=['title', 'spectrum_type']),  # 用于标品快速匹配
+            models.Index(fields=["title", "spectrum_type"]),
         ]
 
+    # ─────────────────────────────
+    # matchms Spectrum 还原
+    # ─────────────────────────────
     def get_spectrum(self) -> Spectrum | None:
         """
-        从 spectrum_blob（优先）或 peaks 字段还原为 matchms Spectrum 对象。
+        从 spectrum_blob（优先）或 peaks 还原为 matchms Spectrum
         """
         try:
             if self.spectrum_blob:
                 return pickle.loads(self.spectrum_blob)
+
             if self.peaks:
-                mz = [p['mz'] for p in self.peaks]
-                ints = [p['int'] for p in self.peaks]
+                mz = [p["mz"] for p in self.peaks]
+                intensities = [p["int"] for p in self.peaks]
+
                 metadata = {
                     "precursor_mz": self.precursor_mz,
                     "smiles": self.smiles,
                     "name": self.standard,
                     "ionmode": self.ionmode,
                 }
-                return Spectrum(mz=np.array(mz), intensities=np.array(ints), metadata=metadata)
+
+                return Spectrum(
+                    mz=np.array(mz),
+                    intensities=np.array(intensities),
+                    metadata=metadata,
+                )
         except Exception as e:
-            print(f"get_spectrum error: {e}")
+            print(f"[get_spectrum error] ID={self.id}: {e}")
+
         return None

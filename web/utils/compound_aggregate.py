@@ -130,3 +130,25 @@ def aggregate_by_inchikey(
 
     results.sort(key=lambda x: x["compound_name"])
     return results
+
+from rdkit.Chem.MolStandardize import rdMolStandardize
+
+def normalize_mol(mol):
+    """
+    RDKit 分子标准化：
+    - 去盐
+    - 中和电荷
+    """
+    if mol is None:
+        return None
+
+    try:
+        remover = rdMolStandardize.SaltRemover()
+        mol = remover.StripMol(mol, dontRemoveEverything=True)
+
+        uncharger = rdMolStandardize.Uncharger()
+        mol = uncharger.uncharge(mol)
+
+        return mol
+    except Exception:
+        return mol

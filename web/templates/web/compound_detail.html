@@ -220,63 +220,129 @@
 
 <br><br>
 
-  {% if similar_samples %}
-  <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-4">
-    <thead class="table-info">
-      <tr class="table-info">
-          <th class="text-center fs-5 py-2" colspan="8">Plants Containing Similar Compounds</th>
-      </tr>      
-    </thead>
-      <tr class="table-secondary fw-bold">
-        <th>#</th>
-        <th>Chinese Name</th>
-        <th>Latin Name</th>
-        <th>Tissue</th>
-        <th>Precursor m/z</th>
-        <th>Ion mode</th>
-        <th>Similarity Score</th>
-        <th></th>
-      </tr>
-    <tbody>
-      {% for s in similar_samples.object_list %}
-        <tr>
-          <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
-          <td>{{ s.chinese_name }}</td>
-          <td>{{ s.latin_name }}</td>
-          <td>{{ s.tissue }}</td>
-          <td>{{ s.precursor_mz|floatformat:4 }}</td>
-          <td>{{ s.ionmode }}</td>
-          <td>{{ s.score|floatformat:3 }}</td>
-          <td><a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}" class="btn btn-sm btn-outline-primary">View</a></td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="7" class="text-muted">No similar samples found.</td></tr>
-      {% endfor %}
-    </tbody>
-    </table>
+    {% if similar_samples %}
+      <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-4">
+        <thead class="table-info">
+          <tr class="table-info">
+              <th class="text-center fs-5 py-2" colspan="8">Plants Containing Similar Compounds</th>
+          </tr>      
+        </thead>
+          <tr class="table-secondary fw-bold">
+            <th>#</th>
+            <th>Chinese Name</th>
+            <th>Latin Name</th>
+            <th>Tissue</th>
+            <th>Precursor m/z</th>
+            <th>Ion mode</th>
+            <th>Similarity Score</th>
+            <th></th>
+          </tr>
+        <tbody>
+          {% for s in similar_samples.object_list %}
+            <tr>
+              <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
+              <td>{{ s.chinese_name }}</td>
+              <td>{{ s.latin_name }}</td>
+              <td>{{ s.tissue }}</td>
+              <td>{{ s.precursor_mz|floatformat:4 }}</td>
+              <td>{{ s.ionmode }}</td>
+              <td>{{ s.score|floatformat:3 }}</td>
+              <td>
+                <a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}" 
+                  class="btn btn-sm btn-outline-primary">View</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="text-muted">No similar samples found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <!-- similar_samples 分页 -->
+      <div id="similar-pagination" class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+          <!-- JS 会渲染分页内容 -->
+      </div>
+
+      <script>
+      document.addEventListener("DOMContentLoaded", function() {
+          const table = document.querySelector("#similar-samples-table tbody");
+          const rows = Array.from(table.querySelectorAll("tr"));
+          const pageSize = 15;
+          let currentPage = 1;
+
+          function renderPage(page) {
+              currentPage = page;
+              const start = (page - 1) * pageSize;
+              const end = start + pageSize;
+              
+              rows.forEach((row, i) => {
+                  row.style.display = (i >= start && i < end) ? "" : "none";
+              });
+              renderPagination();
+          }
+
+          function renderPagination() {
+              const total = rows.length;
+              if(total <= 0) return; // 🚨 如果没有数据就不渲染分页
+
+              const totalPages = Math.ceil(total / pageSize);
+              const startIndex = (currentPage - 1) * pageSize + 1;
+              const endIndex = Math.min(currentPage * pageSize, total);
+
+              let html = `
+                <div class="page_info">
+                    Displaying <b>${startIndex} - ${endIndex}</b> of <b>${total}</b> in total
+                </div>
+                <ul class="pagination pagination-sm mb-0">
+              `;
+
+              if (currentPage > 1) {
+                  html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage-1}">‹ Prev</a></li>`;
+              }
+
+              let startPage = Math.max(1, currentPage - 2);
+              let endPage = Math.min(totalPages, currentPage + 2);
+
+              if (startPage > 1) {
+                  html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+                  if (startPage > 2) {
+                      html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
+                  }
+              }
+
+              for (let i = startPage; i <= endPage; i++) {
+                  html += `<li class="page-item ${i===currentPage ? "active":""}">
+                              <a class="page-link" href="#" data-page="${i}">${i}</a>
+                          </li>`;
+              }
+
+              if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) {
+                      html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
+                  }
+                  html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+              }
+
+              if (currentPage < totalPages) {
+                  html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage+1}">Next ›</a></li>`;
+              }
+
+              html += `</ul>`;
+              document.querySelector("#similar-pagination").innerHTML = html;
+
+              document.querySelectorAll("#similar-pagination a[data-page]").forEach(a => {
+                  a.addEventListener("click", function(e) {
+                      e.preventDefault();
+                      renderPage(parseInt(this.dataset.page));
+                  });
+              });
+          }
+
+          renderPage(1);
+      });
+      </script>
     {% endif %}
 
-    <!-- similar_samples 分页 -->
-    <div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-      <div class="page_info">
-          Displaying <b>{{ similar_samples.start_index }} - {{ similar_samples.end_index }}</b> of <b>{{ similar_samples.paginator.count }}</b> in total
-      </div>
-      <ul class="pagination pagination-sm mb-0">
-          {% if similar_samples.has_previous %}
-          <li class="page-item"><a class="page-link" href="?sample_page={{ similar_samples.previous_page_number }}">‹ Prev</a></li>
-          {% endif %}
-
-          {% for num in similar_samples.paginator.page_range %}
-          {% if num >= similar_samples.number|add:"-2" and num <= similar_samples.number|add:"2" %}
-          <li class="page-item {% if num == similar_samples.number %}active{% endif %}">
-              <a class="page-link" href="?sample_page={{ num }}">{{ num }}</a>
-          </li>
-          {% endif %}
-          {% endfor %}
-
-          {% if similar_samples.has_next %}
-          <li class="page-item"><a class="page-link" href="?sample_page={{ similar_samples.next_page_number }}">Next ›</a></li>
-          {% endif %}
       </ul>
     </div>
 
