@@ -12,7 +12,6 @@
     padding-right: 50px !important;
   }
 
-  /* 表头统一蓝色风格 */
   .table-info > th,
   .table-info > td,
   thead.table-info > tr > th {
@@ -21,38 +20,27 @@
   }
 
   .pubchem-link {
-  font-size: 0.85em;       /* 比正文小一点 */
-  color: #6c757d;          /* Bootstrap 灰色 */
-  margin-left: 8px;        /* 和名字留点空隙 */
-  text-decoration: none;   /* 默认不带下划线 */
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-left: 8px;
+    text-decoration: none;
   }
 
   .pubchem-link:hover {
-    color: #0d6efd;          /* 悬停时变成 Bootstrap 蓝色 */
+    color: #0d6efd;
     text-decoration: underline;
   }
 </style>
 
 <div>
-  <div style="-webkit-text-size-adjust: 100%;
-              -webkit-tap-highlight-color: transparent;
-              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-              font-size: 20px;
-              line-height: 1.428571429;
-              color: #333333;
-              box-sizing: border-box;
-              padding-bottom: 10px;
-              margin: 40px 0 20px;
-              border-bottom: 2px solid #eeeeee;">
+  <div style="font-size:20px;margin:40px 0 20px;border-bottom:2px solid #eee;padding-bottom:10px;">
       {{ compound.standard }}
       <a href="/compound/list/" class="btn btn-primary btn-sm">Back</a>
   </div>
 </div>
 
-  <!-- Content -->
+<!-- ================= Compound Information ================= -->
 <table class="table w-100 table-bordered table-hover mb-4">
-
-  <!-- 标题 -->
   <tr class="table-info">
       <th class="text-center fs-5 py-2" colspan="2">Compound Information</th>
   </tr>
@@ -61,372 +49,201 @@
     <td colspan="2">
       <div class="row">
 
-        <!-- 左侧结构图 -->
         <div class="col-md-4 text-center">
             {% if mol_img %}
-                <img src="data:image/png;base64,{{ mol_img }}"
-                     class="img-fluid img-thumbnail"
-                     style="max-width: 100%;">
+              <img src="data:image/png;base64,{{ mol_img }}" class="img-fluid img-thumbnail">
             {% else %}
-                <p class="text-muted">No structure available</p>
+              <p class="text-muted">No structure available</p>
             {% endif %}
         </div>
 
-        <!-- 右侧信息 -->
         <div class="col-md-8">
-            <!-- 基础信息 -->
-            <table class="table table-sm table-borderless mb-4">
-                <tbody>
-                  <tr>
-                      <th class="text-end text-nowrap" style="width: 180px;">Compound Name</th>
-                      <td>
-                          <strong>{{ compound.standard }}</strong>
-                          <a href="https://pubchem.ncbi.nlm.nih.gov/#query={{ compound.standard|urlencode }}&tab=compound"
-                             target="_blank" class="pubchem-link">🔗 PubChem</a>
-                      </td>
-                  </tr>
-                  {% if compound.molecular_formula %}
-                  <tr>
-                      <th class="text-end text-nowrap">Molecular Formula</th>
-                      <td>{{ compound.molecular_formula }}</td>
-                  </tr>
-                  {% endif %}
-                  {% if compound.inchikey %}
-                  <tr>
-                      <th class="text-end text-nowrap">InChIKey</th>
-                      <td>{{ compound.inchikey }}</td>
-                  </tr>
-                  {% endif %}
-                  <!-- <tr>
-                      <th class="text-end text-nowrap">Ion Mode</th>
-                      <td>{{ compound.ionmode }}</td>
-                  </tr> -->
-                  <tr>
-                      <th class="text-end text-nowrap">Database</th>
-                      <td>{{ compound.database }}</td>
-                  </tr>
-                  <tr>
-                      <th class="text-end text-nowrap">PEPMASS</th>
-                      <td>{{ compound.precursor_mz|floatformat:4 }}</td>
-                  </tr>
-                </tbody>
-            </table>
+          <table class="table table-sm table-borderless mb-4">
+            <tbody>
+              <tr>
+                <th class="text-end">Compound Name</th>
+                <td><strong>{{ compound.standard }}</strong></td>
+              </tr>
+              {% if compound.inchikey %}
+              <tr>
+                <th class="text-end">InChIKey</th>
+                <td>
+                  {{ compound.inchikey }}
+                  <a href="https://pubchem.ncbi.nlm.nih.gov/#query={{ compound.inchikey }}&tab=compound"
+                     target="_blank" class="pubchem-link">🔗 PubChem</a>
+                </td>
+              </tr>
+              {% endif %}
+              <tr>
+                <th class="text-end">Database</th>
+                <td>{{ compound.database }}</td>
+              </tr>
+              <tr>
+                <th class="text-end">PEPMASS</th>
+                <td>{{ compound.precursor_mz|floatformat:4 }}</td>
+              </tr>
+            </tbody>
+          </table>
 
-            <!-- RDKit 属性 -->
-            {% if rdkit %}
-            <div class="bg-light p-2 rounded mb-2 fw-semibold border">Calculated Properties</div>
-            <table class="table table-sm table-borderless w-100">
-                <!-- 三等分列宽 -->
-                <colgroup>
-                    <col style="width: 16.6%;">
-                    <col style="width: 16.6%;">
-                    <col style="width: 16.6%;">
-                    <col style="width: 16.6%;">
-                    <col style="width: 16.6%;">
-                    <col style="width: 16.6%;">
-                </colgroup>
-                <tbody>
-                  <tr>
-                      <th class="text-end text-nowrap">Molecular Weight</th>
-                      <td>{{ rdkit.mol_weight }}</td>
-                      <th class="text-end text-nowrap">H-bond Donors</th>
-                      <td>{{ rdkit.hbd }}</td>
-                      <th class="text-end text-nowrap">Mol LogP</th>
-                      <td>{{ rdkit.logp }}</td>
-                  </tr>
-                  <tr>
-                      <th class="text-end text-nowrap">Number of Rings</th>
-                      <td>{{ rdkit.num_rings }}</td>
-                      <th class="text-end text-nowrap">H-bond Acceptors</th>
-                      <td>{{ rdkit.hba }}</td>
-                      <th class="text-end text-nowrap">QED</th>
-                      <td>{{ rdkit.qed }}</td>
-                  </tr>
-                  <tr>
-                      <th class="text-end text-nowrap">Aromatic Rings</th>
-                      <td>{{ rdkit.num_aromatic_rings }}</td>
-                      <th class="text-end text-nowrap">Rotatable Bonds</th>
-                      <td>{{ rdkit.rotatable_bonds }}</td>
-                      <th class="text-end text-nowrap">SA Score</th>
-                      <td>{{ rdkit.sa_score }}</td>
-                  </tr>
-                </tbody>
-            </table>
-            {% endif %}
+          {% if rdkit %}
+          <div class="bg-light p-2 rounded mb-2 fw-semibold border">
+            Calculated Properties
+          </div>
+          <table class="table table-sm table-borderless">
+            <tbody>
+              <tr>
+                <th class="text-end">Molecular Weight</th><td>{{ rdkit.mol_weight }}</td>
+                <th class="text-end">HBD</th><td>{{ rdkit.hbd }}</td>
+                <th class="text-end">LogP</th><td>{{ rdkit.logp }}</td>
+              </tr>
+              <tr>
+                <th class="text-end">Rings</th><td>{{ rdkit.num_rings }}</td>
+                <th class="text-end">HBA</th><td>{{ rdkit.hba }}</td>
+                <th class="text-end">QED</th><td>{{ rdkit.qed }}</td>
+              </tr>
+              <tr>
+                <th class="text-end">Aromatic Rings</th><td>{{ rdkit.num_aromatic_rings }}</td>
+                <th class="text-end">Rotatable Bonds</th><td>{{ rdkit.rotatable_bonds }}</td>
+                <th class="text-end">SA Score</th><td>{{ rdkit.sa_score }}</td>
+              </tr>
+            </tbody>
+          </table>
+          {% endif %}
         </div>
       </div>
     </td>
   </tr>
 </table>
-<br><br>
 
+<br>
 
-  {# ---------- Herb Sources ------------- #}
-  <table class="table w-100 table-bordered table-hover mb-4">
-    <thead class="table-info">
-      <tr class="table-info">
-          <th class="text-center fs-5 py-2" colspan="7">Herb Sources</th>
-      </tr>
-    </thead>
-      <tr class="table-secondary fw-bold">
-        <th>#</th>
-        <th>Chinese Name</th>
-        <th>Latin Name</th>
-        <th>Tissue</th>
-        <th>Precursor m/z</th>
-        <th>Ion mode</th>
-        <th></th>
-      </tr>
-    <tbody>
-      {% for ps in plant_sources.object_list %}
-        <tr>
-          <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
-          <td>{{ ps.chinese_name }}</td>
-          <td>{{ ps.latin_name }}</td>
-          <td>{{ ps.tissue }}</td>
-          <td>{{ ps.precursor_mz|floatformat:4 }}</td>
-          <td>{{ ps.ionmode }}</td>
-          <td><a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound_id=compound.id %}?pid={{ ps.pid }}" class="btn btn-sm btn-outline-primary">View</a></td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="7" class="text-muted">No herb recorded for this compound.</td></tr>
-      {% endfor %}
-    </tbody>
-    </table>
+<!-- ================= Herb Sources ================= -->
+<table class="table w-100 table-bordered table-hover mb-4">
+  <thead class="table-info">
+    <tr><th class="text-center fs-5 py-2" colspan="7">Herb Sources</th></tr>
+  </thead>
+  <tr class="table-secondary fw-bold">
+    <th>#</th><th>Chinese Name</th><th>Latin Name</th>
+    <th>Tissue</th><th>Precursor m/z</th><th>Ion mode</th><th></th>
+  </tr>
+  <tbody>
+    {% for ps in plant_sources.object_list %}
+    <tr>
+      <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
+      <td>{{ ps.chinese_name }}</td>
+      <td>{{ ps.latin_name }}</td>
+      <td>{{ ps.tissue }}</td>
+      <td>{{ ps.precursor_mz|floatformat:4 }}</td>
+      <td>{{ ps.ionmode }}</td>
+      <td>
+        <a href="{% url 'herb_compound_detail' latin_name=ps.latin_slug compound_id=compound.id %}?pid={{ ps.pid }}"
+           class="btn btn-sm btn-outline-primary">View</a>
+      </td>
+    </tr>
+    {% empty %}
+      <tr><td colspan="7" class="text-muted">No herb recorded.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
 
-    <!-- herb_sources 分页 -->
-    <div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-      <div class="page_info">
-          Displaying <b>{{ plant_sources.start_index }} - {{ plant_sources.end_index }}</b> of <b>{{ plant_sources.paginator.count }}</b> in total
-      </div>
-      <ul class="pagination pagination-sm mb-0">
-          {% if plant_sources.has_previous %}
-          <li class="page-item"><a class="page-link" href="?plant_page={{ plant_sources.previous_page_number }}">‹ Prev</a></li>
-          {% endif %}
-
-          {% for num in plant_sources.paginator.page_range %}
-          {% if num >= plant_sources.number|add:"-2" and num <= plant_sources.number|add:"2" %}
-          <li class="page-item {% if num == plant_sources.number %}active{% endif %}">
-              <a class="page-link" href="?plant_page={{ num }}">{{ num }}</a>
-          </li>
-          {% endif %}
-          {% endfor %}
-
-          {% if plant_sources.has_next %}
-          <li class="page-item"><a class="page-link" href="?plant_page={{ plant_sources.next_page_number }}">Next ›</a></li>
-          {% endif %}
-      </ul>
-    </div>
-
-<br><br>
-
-    {% if similar_samples %}
-      <table id="similar-samples-table" class="table w-100 table-bordered table-hover mb-4">
-        <thead class="table-info">
-          <tr class="table-info">
-              <th class="text-center fs-5 py-2" colspan="8">Plants Containing Similar Compounds</th>
-          </tr>      
-        </thead>
-          <tr class="table-secondary fw-bold">
-            <th>#</th>
-            <th>Chinese Name</th>
-            <th>Latin Name</th>
-            <th>Tissue</th>
-            <th>Precursor m/z</th>
-            <th>Ion mode</th>
-            <th>Similarity Score</th>
-            <th></th>
-          </tr>
-        <tbody>
-          {% for s in similar_samples.object_list %}
-            <tr>
-              <td>{{ forloop.counter0|add:plant_sources.start_index }}</td>
-              <td>{{ s.chinese_name }}</td>
-              <td>{{ s.latin_name }}</td>
-              <td>{{ s.tissue }}</td>
-              <td>{{ s.precursor_mz|floatformat:4 }}</td>
-              <td>{{ s.ionmode }}</td>
-              <td>{{ s.score|floatformat:3 }}</td>
-              <td>
-                <a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}" 
-                  class="btn btn-sm btn-outline-primary">View</a>
-              </td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="8" class="text-muted">No similar samples found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <!-- similar_samples 分页 -->
-      <div id="similar-pagination" class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-          <!-- JS 会渲染分页内容 -->
-      </div>
-
-      <script>
-      document.addEventListener("DOMContentLoaded", function() {
-          const table = document.querySelector("#similar-samples-table tbody");
-          const rows = Array.from(table.querySelectorAll("tr"));
-          const pageSize = 15;
-          let currentPage = 1;
-
-          function renderPage(page) {
-              currentPage = page;
-              const start = (page - 1) * pageSize;
-              const end = start + pageSize;
-              
-              rows.forEach((row, i) => {
-                  row.style.display = (i >= start && i < end) ? "" : "none";
-              });
-              renderPagination();
-          }
-
-          function renderPagination() {
-              const total = rows.length;
-              if(total <= 0) return; // 🚨 如果没有数据就不渲染分页
-
-              const totalPages = Math.ceil(total / pageSize);
-              const startIndex = (currentPage - 1) * pageSize + 1;
-              const endIndex = Math.min(currentPage * pageSize, total);
-
-              let html = `
-                <div class="page_info">
-                    Displaying <b>${startIndex} - ${endIndex}</b> of <b>${total}</b> in total
-                </div>
-                <ul class="pagination pagination-sm mb-0">
-              `;
-
-              if (currentPage > 1) {
-                  html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage-1}">‹ Prev</a></li>`;
-              }
-
-              let startPage = Math.max(1, currentPage - 2);
-              let endPage = Math.min(totalPages, currentPage + 2);
-
-              if (startPage > 1) {
-                  html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
-                  if (startPage > 2) {
-                      html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
-                  }
-              }
-
-              for (let i = startPage; i <= endPage; i++) {
-                  html += `<li class="page-item ${i===currentPage ? "active":""}">
-                              <a class="page-link" href="#" data-page="${i}">${i}</a>
-                          </li>`;
-              }
-
-              if (endPage < totalPages) {
-                  if (endPage < totalPages - 1) {
-                      html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
-                  }
-                  html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
-              }
-
-              if (currentPage < totalPages) {
-                  html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage+1}">Next ›</a></li>`;
-              }
-
-              html += `</ul>`;
-              document.querySelector("#similar-pagination").innerHTML = html;
-
-              document.querySelectorAll("#similar-pagination a[data-page]").forEach(a => {
-                  a.addEventListener("click", function(e) {
-                      e.preventDefault();
-                      renderPage(parseInt(this.dataset.page));
-                  });
-              });
-          }
-
-          renderPage(1);
-      });
-      </script>
+<!-- Herb pagination -->
+<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+  <div class="page_info">
+    Displaying <b>{{ plant_sources.start_index }} - {{ plant_sources.end_index }}</b>
+    of <b>{{ plant_sources.paginator.count }}</b>
+  </div>
+  <ul class="pagination pagination-sm mb-0">
+    {% if plant_sources.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?plant_page={{ plant_sources.previous_page_number }}">‹ Prev</a>
+      </li>
     {% endif %}
-
-      </ul>
-    </div>
-
-  <script>
-  document.addEventListener("DOMContentLoaded", function() {
-      const table = document.querySelector("#similar-samples-table tbody");
-      const rows = Array.from(table.querySelectorAll("tr"));
-      const pageSize = 15;   // 每页 15 条
-      let currentPage = 1;
-
-      function renderPage(page) {
-          currentPage = page;
-          const start = (page - 1) * pageSize;
-          const end = start + pageSize;
-          
-          rows.forEach((row, i) => {
-              row.style.display = (i >= start && i < end) ? "" : "none";
-          });
-          renderPagination();
-      }
-
-      function renderPagination() {
-          const total = rows.length;
-          const totalPages = Math.ceil(total / pageSize);
-          const startIndex = (currentPage - 1) * pageSize + 1;
-          const endIndex = Math.min(currentPage * pageSize, total);
-
-          let html = `
-            <div class="page_info">
-                Displaying <b>${startIndex} - ${endIndex}</b> of <b>${total}</b> in total
-            </div>
-            <ul class="pagination pagination-sm mb-0">
-          `;
-
-          if (currentPage > 1) {
-              html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage-1}">‹ Prev</a></li>`;
-          }
-
-          // 页码范围（当前页前后 2 页）
-          let startPage = Math.max(1, currentPage - 2);
-          let endPage = Math.min(totalPages, currentPage + 2);
-
-          if (startPage > 1) {
-              html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
-              if (startPage > 2) {
-                  html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
-              }
-          }
-
-          for (let i = startPage; i <= endPage; i++) {
-              html += `<li class="page-item ${i===currentPage ? "active":""}">
-                          <a class="page-link" href="#" data-page="${i}">${i}</a>
-                      </li>`;
-          }
-
-          if (endPage < totalPages) {
-              if (endPage < totalPages - 1) {
-                  html += `<li class="page-item disabled"><a class="page-link" href="#">…</a></li>`;
-              }
-              html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
-          }
-
-          if (currentPage < totalPages) {
-              html += `<li class="page-item"><a class="page-link" href="#" data-page="${currentPage+1}">Next ›</a></li>`;
-          }
-
-          html += `</ul>`;
-          document.querySelector("#similar-pagination").innerHTML = html;
-
-          // 绑定点击事件
-          document.querySelectorAll("#similar-pagination a[data-page]").forEach(a => {
-              a.addEventListener("click", function(e) {
-                  e.preventDefault();
-                  renderPage(parseInt(this.dataset.page));
-              });
-          });
-      }
-
-      renderPage(1); // 默认显示第 1 页
-  });
-  </script>
-
+    {% for num in plant_sources.paginator.page_range %}
+      {% if num >= plant_sources.number|add:"-2" and num <= plant_sources.number|add:"2" %}
+      <li class="page-item {% if num == plant_sources.number %}active{% endif %}">
+        <a class="page-link" href="?plant_page={{ num }}">{{ num }}</a>
+      </li>
+      {% endif %}
+    {% endfor %}
+    {% if plant_sources.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?plant_page={{ plant_sources.next_page_number }}">Next ›</a>
+      </li>
+    {% endif %}
+  </ul>
 </div>
 
+<br><br>
+
+<!-- ================= Similar Samples ================= -->
+{% if similar_samples %}
+<table class="table w-100 table-bordered table-hover mb-4">
+  <thead class="table-info">
+    <tr><th class="text-center fs-5 py-2" colspan="8">Plants Containing Similar Compounds</th></tr>
+  </thead>
+  <tr class="table-secondary fw-bold">
+    <th>#</th><th>Chinese Name</th><th>Latin Name</th>
+    <th>Tissue</th><th>Precursor m/z</th><th>Ion mode</th>
+    <th>Similarity</th><th></th>
+  </tr>
+  <tbody>
+    {% for s in similar_samples.object_list %}
+    <tr>
+      <td>{{ forloop.counter0|add:similar_samples.start_index }}</td>
+      <td>{{ s.chinese_name }}</td>
+      <td>{{ s.latin_name }}</td>
+      <td>{{ s.tissue }}</td>
+      <td>{{ s.precursor_mz|floatformat:4 }}</td>
+      <td>{{ s.ionmode }}</td>
+      <td>{{ s.score|floatformat:3 }}</td>
+      <td>
+        <a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}"
+           class="btn btn-sm btn-outline-primary">View</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Similar pagination -->
+<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+  <div class="page_info">
+    Displaying <b>{{ similar_samples.start_index }} - {{ similar_samples.end_index }}</b>
+    of <b>{{ similar_samples.paginator.count }}</b>
+  </div>
+
+  <ul class="pagination pagination-sm mb-0">
+    {% if similar_samples.has_previous %}
+      <li class="page-item">
+        <a class="page-link"
+           href="?sample_page={{ similar_samples.previous_page_number }}&plant_page={{ plant_sources.number }}">
+           ‹ Prev
+        </a>
+      </li>
+    {% endif %}
+
+    {% for num in similar_samples.paginator.page_range %}
+      {% if num >= similar_samples.number|add:"-2" and num <= similar_samples.number|add:"2" %}
+      <li class="page-item {% if num == similar_samples.number %}active{% endif %}">
+        <a class="page-link"
+           href="?sample_page={{ num }}&plant_page={{ plant_sources.number }}">
+           {{ num }}
+        </a>
+      </li>
+      {% endif %}
+    {% endfor %}
+
+    {% if similar_samples.has_next %}
+      <li class="page-item">
+        <a class="page-link"
+           href="?sample_page={{ similar_samples.next_page_number }}&plant_page={{ plant_sources.number }}">
+           Next ›
+        </a>
+      </li>
+    {% endif %}
+  </ul>
+</div>
+{% endif %}
 
 <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
 <hr>

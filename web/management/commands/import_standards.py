@@ -159,6 +159,7 @@ class Command(BaseCommand):
                 standard=standard_str,
                 database=meta_lower.get('database') or 'standard',
                 smiles=meta_lower.get('smiles') or '',
+                inchikey = (meta_lower.get("inchikey")or meta_lower.get("inchi_key")or meta_lower.get("inchi-key")),
                 score=float(meta_lower.get('score') or 0),
                 precursor_mz=precursor_val,
                 rtinseconds=float(meta_lower.get('rtinseconds') or 0),

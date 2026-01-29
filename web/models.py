@@ -8,6 +8,7 @@ from matchms import Spectrum
 from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from web.utils.compound_aggregate import normalize_mol
+from matchms.filtering import normalize_intensities
 
 class CompoundLibrary(models.Model):
     # ─────────────────────────────
@@ -24,6 +25,7 @@ class CompoundLibrary(models.Model):
     # 结构相关
     # ─────────────────────────────
     smiles = models.TextField(blank=True, null=True)
+    inchikey = models.CharField(max_length=27, blank=True, null=True, db_index=True)
 
     # ⚠️ 只存「最终 Morgan FP」，搜索时不再计算
     morgan_fp = models.BinaryField(blank=True, null=True)
@@ -120,11 +122,18 @@ class CompoundLibrary(models.Model):
     def get_spectrum(self) -> Spectrum | None:
         """
         从 spectrum_blob（优先）或 peaks 还原为 matchms Spectrum
+        并确保强度已归一化（spec2vec 必需）
         """
         try:
+            # ---------- 1️⃣ 优先使用 spectrum_blob ----------
             if self.spectrum_blob:
-                return pickle.loads(self.spectrum_blob)
+                spectrum = pickle.loads(self.spectrum_blob)
 
+                # ⭐ 确保 blob 里的谱图也被归一化
+                spectrum = normalize_intensities(spectrum)
+                return spectrum
+
+            # ---------- 2️⃣ 从 peaks 构建 ----------
             if self.peaks:
                 mz = [p["mz"] for p in self.peaks]
                 intensities = [p["int"] for p in self.peaks]
@@ -134,13 +143,19 @@ class CompoundLibrary(models.Model):
                     "smiles": self.smiles,
                     "name": self.standard,
                     "ionmode": self.ionmode,
+                    "compound_id": self.id,
                 }
 
-                return Spectrum(
-                    mz=np.array(mz),
-                    intensities=np.array(intensities),
+                spectrum = Spectrum(
+                    mz=np.array(mz, dtype=float),
+                    intensities=np.array(intensities, dtype=float),
                     metadata=metadata,
                 )
+
+                # ⭐⭐ 关键：强度归一化 ⭐⭐
+                spectrum = normalize_intensities(spectrum)
+                return spectrum
+
         except Exception as e:
             print(f"[get_spectrum error] ID={self.id}: {e}")
 

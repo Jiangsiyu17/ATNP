@@ -338,6 +338,7 @@ import rdkit.Chem.AllChem as AllChem
 from web.utils import sascorer
 
 from django.core.paginator import Paginator
+from web.utils.similar_cache import get_similar_samples
 
 def compound_detail(request, pk):
     logger = logging.getLogger(__name__)
@@ -403,41 +404,40 @@ def compound_detail(request, pk):
             ps["latin_slug"] = "unknown-plant"
 
 
-    # ===== 表格 B：similar_samples =====
-    similar_samples = []
-    spectrum = compound.get_spectrum()
-    if spectrum:
-        intensities = spectrum.intensities
-        if intensities.max() > 0:
-            intensities = intensities / intensities.max()
-        spectrum = Spectrum(mz=spectrum.mz, intensities=intensities, metadata=spectrum.metadata)
+    # ===== 表格 B：similar_samples（预计算版）=====
+    raw_similar = get_similar_samples(
+        compound.id,
+        ionmode=compound.ionmode or "positive"
+    )
 
-        raw_results = identify_spectrums([spectrum])
-        filtered = [r for r in raw_results if r.get("score", 0) > 0.6]
+    logger.warning(
+        f"[DEBUG] compound_id={compound.id}, similar_count={len(raw_similar)}"
+    )
 
-        best = {}
-        for r in filtered:
-            key = (
-                r.get("latin_name"),
-                r.get("tissue"),
-                r.get("ionmode")
-            )
-            if key not in best or r["score"] > best[key]["score"]:
-                best[key] = r
+    # 去重（同植物 + 组织 + 离子模式，只保留最高分）
+    best = {}
+    for r in raw_similar:
+        key = (
+            r.get("latin_name"),
+            r.get("tissue"),
+            r.get("ionmode"),
+        )
+        if key not in best or r["score"] > best[key]["score"]:
+            best[key] = r
 
-        similar_samples = [
-            {
-                "latin_name": format_latin_name(r.get("latin_name")),
-                "chinese_name": r.get("chinese_name"),
-                "tissue": (r.get("tissue") or "").capitalize(),
-                "score": r.get("score"),
-                "latin_slug": slugify(r.get("latin_name") or ""),
-                "precursor_mz": round(r.get("precursor_mz", 0), 4),
-                "ionmode": r.get("ionmode", "-"),
-                "spectrum_idx": r.get("spectrum_index"),
-            }
-            for r in sorted(best.values(), key=lambda x: x["score"], reverse=True)
-        ]
+    similar_samples = [
+        {
+            "latin_name": format_latin_name(r.get("latin_name")),
+            "chinese_name": r.get("chinese_name"),
+            "tissue": (r.get("tissue") or "").capitalize(),
+            "score": r.get("score"),
+            "latin_slug": slugify(r.get("latin_name") or ""),
+            "precursor_mz": round(r.get("precursor_mz", 0), 4),
+            "ionmode": r.get("ionmode", "-"),
+            "spectrum_idx": r.get("spectrum_index"),
+        }
+        for r in sorted(best.values(), key=lambda x: x["score"], reverse=True)
+    ]
 
     # ===== 分页处理 =====
     plant_page = Paginator(plant_sources, 10).get_page(request.GET.get("plant_page"))
@@ -570,21 +570,6 @@ def herb_compound_detail(request, latin_name, compound_id):
     })
 
 
-# 植物谱图pickle路径
-HERB_SPECTRA_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_1.pickle"
-HERB_SPECTRA_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_1.pickle"
-
-# 缓存pickle避免重复加载
-_herb_spectra_cache = {"pos": None, "neg": None}
-
-def load_herb_spectra(ionmode="positive"):
-    global _herb_spectra_cache
-    key = "pos" if ionmode == "positive" else "neg"
-    if _herb_spectra_cache[key] is None:
-        path = HERB_SPECTRA_POS if key == "pos" else HERB_SPECTRA_NEG
-        with open(path, "rb") as f:
-            _herb_spectra_cache[key] = pickle.load(f)
-    return _herb_spectra_cache[key]
 
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
