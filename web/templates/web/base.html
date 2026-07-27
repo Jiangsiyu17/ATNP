@@ -1,13 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}ATNP Database{% endblock %}</title>
     {% load static %}
+
+    <!-- ================= CSS ================= -->
+
+    <!-- Bootstrap -->
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
-    <link href="{% static 'css/datatables.min.css' %}" rel="stylesheet">
+
+    <!-- DataTables Bootstrap 5 -->
+    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- ================= Global Style ================= -->
     <style>
         .custom-link {
             color: black;
@@ -94,72 +103,76 @@
             color: white;
         }
     </style>
+
     {% block extra_head %}{% endblock %}
 </head>
 
 <body>
-    <!-- 顶部导航栏 -->
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'home' %}">ATNP</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
 
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'herb_list' %}">Plants List</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{% url 'compound_list' %}">Compound List</a></li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="searchDropdown" role="button"
-                        data-bs-toggle="dropdown" aria-expanded="false">
-                            Search
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="searchDropdown">
-                            <li>
-                                <a class="dropdown-item" href="{% url 'structure_query' %}">Structure Query</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'molecular_weight_query' %}">Molecular Weight Query</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'msms_search' %}">MS/MS Query</a>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="nav-item"><a class="nav-link" href="">Download</a></li>
+<!-- ================= Navbar ================= -->
+<nav class="navbar navbar-expand-lg">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'home' %}">ATNP</a>
 
-                </ul>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-                <!-- 全局搜索框 -->
-                <form class="d-flex align-items-center search-bar" action="{% url 'search' %}" method="get">
-                    <input class="form-control form-control-sm me-2" type="search" name="q" placeholder="Search">
-                    <button class="btn btn-light btn-sm d-flex align-items-center" type="submit">
-                        <i class="bi bi-search me-1"></i>
-                        <span>Search</span>
-                    </button>
-                </form>
-            </div>    
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'home' %}">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'plant_list' %}">Plants List</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'compound_list' %}">Compound List</a>
+                </li>
+                <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Search</a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'structure_query' %}">Structure Query</a></li>
+                        <li><a class="dropdown-item" href="{% url 'molecular_weight_query' %}">Molecular Weight Query</a></li>
+                        <li><a class="dropdown-item" href="{% url 'msms_search' %}">MS/MS Query</a></li>
+                    </ul>
+                </li>
+            </ul>
+
+            <!-- Global search -->
+            <form class="d-flex" action="{% url 'search' %}" method="get">
+                <input class="form-control form-control-sm me-2"
+                       type="search"
+                       name="q"
+                       placeholder="Search">
+                <button class="btn btn-light btn-sm" type="submit">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
         </div>
-    </nav>
-
-    <!-- 页面内容块 -->
-    <div class="container-fluid px-4">
-        {% block content %}
-        {% endblock %}
     </div>
+</nav>
 
-    <!-- 分页等用的 JS -->
-    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
-    <script src="{% static 'js/jquery.min.js' %}"></script>
-    <script src="{% static 'js/datatables.min.js' %}"></script>
-    <script>
-        $(document).ready(function () {
-            $('#data-table').DataTable();
-        });
-    </script>
+<!-- ================= Page Content ================= -->
+<div class="container-fluid px-4">
+    {% block content %}{% endblock %}
+</div>
+
+<!-- ================= JS（顺序非常重要） ================= -->
+
+<!-- 1️⃣ jQuery（必须最先） -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- 2️⃣ Bootstrap JS -->
+<script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+
+<!-- 3️⃣ DataTables core -->
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+<!-- 4️⃣ DataTables Bootstrap 5 -->
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+
+{% block extra_js %}{% endblock %}
+
 </body>
-
 </html>

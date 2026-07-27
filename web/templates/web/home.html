@@ -32,7 +32,7 @@
     <div class="col-md-8">
       <form method="get" action="{% url 'search' %}">
         <div class="input-group input-group-lg">
-          <input type="text" class="form-control" name="q" placeholder="Search compounds or herbs...">
+          <input type="text" class="form-control" name="q" placeholder="Search compounds or plants...">
           <button class="btn btn-primary" type="submit">Search</button>
         </div>
       </form>
@@ -56,7 +56,7 @@
         <div class="card-body">
           <h5 class="card-title">Plants List</h5>
           <p class="card-text">Browse all plants in the database.</p>
-          <a href="{% url 'herb_list' %}" class="btn btn-outline-primary">View Plants</a>
+          <a href="{% url 'plant_list' %}" class="btn btn-outline-primary">View Plants</a>
         </div>
       </div>
     </div>
@@ -97,8 +97,8 @@
         <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
           The <strong>Compound List</strong> section presents all anticancer natural compounds stored in the database. 
           In the compound detail page, three tables are provided: (1) <em>Compound Information</em>, which displays the compound’s general information including name, SMILES, database source, and structure; 
-          (2) <em>Plants Sources</em>, listing the potential plants containing this compound, with each herb detail page showing basic plant information and spectrum comparisons; 
-          and (3) <em>Similar Compounds in Herbs</em>, presenting plants containing structurally or spectrally similar compounds, together with spectrum comparison details.
+          (2) <em>Plants Sources</em>, listing the potential plants containing this compound, with each plant detail page showing basic plant information and spectrum comparisons; 
+          and (3) <em>Similar Compounds in Plants</em>, presenting plants containing structurally or spectrally similar compounds, together with spectrum comparison details.
         </p>
         <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
           The <strong>Plants List</strong> section displays all plants that contain anticancer natural compounds. 

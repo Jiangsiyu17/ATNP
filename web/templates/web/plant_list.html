@@ -1,0 +1,110 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Plants List{% endblock %}
+
+{% block content %}
+
+<div style="
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 20px;
+    margin: 40px 0 20px;
+    padding-bottom: 9px;
+    border-bottom: 2px solid #eeeeee;">
+    Plants
+</div>
+
+<div class="table-responsive">
+    <table id="plantTable"
+           class="table w-100 table-striped table-bordered table-hover">
+        <thead>
+            <!-- 表头 -->
+            <tr>
+                <th style="width:80px;">#</th>
+                <th>Latin Name</th>
+                <th>Chinese Name</th>
+                <th>Tissue</th>
+                <th style="width:120px;">Details</th>
+            </tr>
+
+            <!-- 搜索行 -->
+            <tr>
+                <th></th>
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search latin name">
+                </th>
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search chinese name">
+                </th>
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search tissue">
+                </th>
+                <th></th>
+            </tr>
+        </thead>
+
+        <tbody></tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(function () {
+
+    const table = $('#plantTable').DataTable({
+        serverSide: true,
+        processing: true,
+
+        searching: true,    // ✅ 必须开启
+        dom: 'lrtip',       // ✅ 隐藏默认搜索框
+        ordering: true,
+        orderCellsTop: true,
+
+        pageLength: 20,
+        lengthMenu: [20, 50, 100],
+
+        ajax: {
+            url: "{% url 'plant_list_api' %}",
+            type: "GET"
+        },
+
+        columns: [
+            { data: "index", orderable: false, searchable: false }, // 0
+            { data: "latin_name" },                                 // 1
+            { data: "chinese_name" },                               // 2
+            { data: "tissue" },                                     // 3
+            { data: "action", orderable: false, searchable: false } // 4
+        ],
+
+        order: [[1, "asc"]],
+
+        language: {
+            processing: "Loading...",
+            lengthMenu: "Show _MENU_ entries",
+            info: "Showing _START_–_END_ of _TOTAL_",
+            infoFiltered: "(filtered from _MAX_ total)",
+            zeroRecords: "No matching plants found"
+        }
+    });
+
+    /* ===== 第二行列搜索（回车触发，跳过 # 列） ===== */
+    $('#plantTable thead tr:eq(1) input').each(function (idx) {
+        $(this).on('keyup', function (e) {
+            if (e.key === 'Enter') {
+                table
+                    .column(idx + 1)   // idx=0 → column 1 (latin)
+                    .search(this.value)
+                    .draw();
+            }
+        });
+    });
+
+});
+</script>
+<hr>
+{% endblock %}

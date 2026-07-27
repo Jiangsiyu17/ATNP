@@ -4,147 +4,108 @@
 {% block title %}Compound List{% endblock %}
 
 {% block content %}
-<div style="-webkit-text-size-adjust: 100%;
-            -webkit-tap-highlight-color: transparent;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: 20px;
-            line-height: 1.428571429;
-            color: #333333;
-            box-sizing: border-box;
-            padding-bottom: 9px;
-            margin: 40px 0 20px;
-            border-bottom: 2px solid #eeeeee;">
+
+<div style="font-size:20px;margin:40px 0 20px;border-bottom:2px solid #eee;">
     Compounds
 </div>
 
-<!-- 分页信息和导航 -->
-<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-    <div class="page_info">
-        Displaying <b>{{ page_obj.start_index }} - {{ page_obj.end_index }}</b> of <b>{{ page_obj.paginator.count }}</b>
-        in total
-    </div>
-    <ul class="pagination pagination-sm mb-0">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
-        </li>
-        {% endif %}
-
-        {% if page_obj.number > 3 %}
-        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
-        {% if page_obj.number > 4 %}
-        <li class="page-item disabled"><a class="page-link" href="#" onclick="return false;">…</a></li>
-        {% endif %}
-        {% endif %}
-
-        {% for num in page_obj.paginator.page_range %}
-        {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %} <li
-            class="page-item {% if num == page_obj.number %}active{% endif %}">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-            </li>
-            {% endif %}
-            {% endfor %}
-
-            {% if page_obj.number < page_obj.paginator.num_pages|add:"-2" %} 
-                {% if page_obj.number < page_obj.paginator.num_pages|add:"-3" %} 
-                    <li class="page-item disabled">
-                        <a class="page-link" href="#" onclick="return false;">…</a>
-                    </li>
-                {% endif %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
-                        {{page_obj.paginator.num_pages }}
-                    </a>
-                </li>
-                {% endif %}
-
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
-                </li>
-                {% endif %}
-    </ul>
-</div>
-
 <div class="table-responsive">
-    {% if no_result %}
-    <p class="text-danger">无内容</p>
-    {% endif %}
+    <table id="compoundTable"
+           class="table w-100 table-striped table-bordered table-hover">
+        <thead>
+            <!-- 表头 -->
+            <tr>
+                <th style="width: 80px;">#</th>
+                <th>Compound name</th>
+                <th>Database</th>
+                <th>Smiles</th>
+                <th>Details</th>
+            </tr>
 
-    <form method="get" action="{% url 'compound_list' %}">
-        <table class="table w-100 table-striped table-bordered table-hover">
-            <thead>
-                <tr>
-                    <th style="min-width: 120px;">#</th>
-                    <th style="min-width: 180px;">Compound name</th>
-                    <th style="min-width: 160px;">Database</th>
-                    <th style="min-width: 200px;">Smiles</th>
-                    <th style="min-width: 160px;"></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for compound in compounds %}
-                <tr>
-                    <td>{{ forloop.counter0|add:page_obj.start_index }}</td>
-                    <td>{{compound.standard }}</td>
-                    <td>{{ compound.database }}</td>
-                    <td style="font-family: monospace; font-size: 0.85em;">{{ compound.smiles }}</td>
-                    <td><a href="{% url 'compound_detail' compound.first_id %}" class="btn btn-sm btn-outline-primary">View</a></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </form>
+            <!-- 搜索行 -->
+            <tr>
+                <th></th>
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search compound name">
+                </th>
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="nist">NIST</option>
+                        <option value="gnps">GNPS</option>
+                        <option value="atnp">ATNP</option>
+                    </select>
+                </th>
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search smiles">
+                </th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 </div>
 
-<!-- 分页信息和导航 -->
-<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-    <div class="page_info">
-        Displaying <b>{{ page_obj.start_index }} - {{ page_obj.end_index }}</b> of <b>{{ page_obj.paginator.count }}</b>
-        in total
-    </div>
-    <ul class="pagination pagination-sm mb-0">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
-        </li>
-        {% endif %}
+{% endblock %}
 
-        {% if page_obj.number > 3 %}
-        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
-        {% if page_obj.number > 4 %}
-        <li class="page-item disabled"><a class="page-link" href="#" onclick="return false;">…</a></li>
-        {% endif %}
-        {% endif %}
+{% block extra_js %}
+<script>
+$(function () {
 
-        {% for num in page_obj.paginator.page_range %}
-        {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %} 
-            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-            </li>
-            {% endif %}
-            {% endfor %}
+    const table = $('#compoundTable').DataTable({
+        serverSide: true,
+        processing: true,
+        ajax: "{% url 'compound_list_api' %}",
+        pageLength: 20,
+        orderCellsTop: true,
+        lengthMenu: [10, 20, 50, 100],
 
-            {% if page_obj.number < page_obj.paginator.num_pages|add:"-2" %} 
-                {% if page_obj.number < page_obj.paginator.num_pages|add:"-3" %} 
-                    <li class="page-item disabled">
-                        <a class="page-link" href="#" onclick="return false;">…</a>
-                    </li>
-                {% endif %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
-                        {{page_obj.paginator.num_pages }}
-                    </a>
-                </li>
-                {% endif %}
+        searching: true,     // ✅ 必须开启
+        dom: 'lrtip',        // ✅ 隐藏默认搜索框
 
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
-                </li>
-                {% endif %}
-    </ul>
-</div>
+        columns: [
+            { data: "index", orderable: false },
+            { data: "standard" },
+            { data: "database" },
+            { data: "smiles", className: "smiles-cell" },
+            { data: "action", orderable: false }
+        ]
+    });
+
+    // ===== 输入框：回车触发搜索 =====
+    $('#compoundTable thead tr:eq(1) input').each(function (idx) {
+        $(this).on('keyup', function (e) {
+            if (e.key === 'Enter') {
+                table
+                    .column(idx + 1) // 跳过 #
+                    .search(this.value)
+                    .draw();
+            }
+        });
+    });
+
+    // ===== 下拉框：change 即搜索（database 列）=====
+    $('#compoundTable thead tr:eq(1) select').on('change', function () {
+        table
+            .column(2)
+            .search(this.value)
+            .draw();
+    });
+
+});
+</script>
+
+<style>
+#compoundTable tbody td.smiles-cell {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    white-space: nowrap;
+    max-width: 320px;
+    overflow-x: auto;
+}
+</style>
+
 <hr>
-
 {% endblock %}

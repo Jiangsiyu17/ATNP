@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# build_index.py 多进程版本，加载植物谱图并构建向量索引（保证pkl和bin严格对应，并记录过滤日志）
+# build_index.py 多进程版本，加载植物谱图并构建向量索引（PEPMASS=None 自动修复）
 
 import os
 import sys
@@ -9,24 +9,27 @@ import numpy as np
 import hnswlib
 import gensim
 from tqdm import tqdm
+from pathlib import Path
+import tempfile
 
-# 设置 Django 环境
+# ---------------- 设置 Django 环境 ----------------
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ATNP.settings")
 import django
 django.setup()
 
-from db_utils import load_plant_spectra_from_folder
+from matchms import Spectrum
+from matchms.importing import load_from_mgf
 
 # ---------------- 路径配置 ----------------
-PLANT_POS_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/pos"
-PLANT_NEG_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/neg"
+PLANT_POS_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/cleaned_mgf/pos"
+PLANT_NEG_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/cleaned_mgf/neg"
 MODEL_POS = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5"
 MODEL_NEG = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5"
-OUT_PICKLE_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_1.pickle"
-OUT_PICKLE_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_1.pickle"
-OUT_INDEX_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_1.bin"
-OUT_INDEX_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_1.bin"
+OUT_PICKLE_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_2.pickle"
+OUT_PICKLE_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_2.pickle"
+OUT_INDEX_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_2.bin"
+OUT_INDEX_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_2.bin"
 
 # ---------------- 多进程全局模型 ----------------
 model = None
@@ -57,14 +60,49 @@ def calc_ms2vec_vector_mp(spec):
         return None, "calc_vector failed"
     return vec, None
 
-def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index_path: str, max_workers: int = None):
-    """加载谱图 -> 去重 -> 计算向量 -> 过滤 -> 保存pickle和索引"""
-    print(f"\n📂 Loading spectra from {mgf_dir} ...")
-    ionmode = "positive" if "pos" in mgf_dir.lower() else "negative"
-    all_spectra = load_plant_spectra_from_folder(mgf_dir, ionmode=ionmode)
-    print(f"✔️ Loaded {len(all_spectra)} spectra with metadata.")
+# ---------------- 安全加载 MGF ----------------
+def safe_load_from_mgf(file_path):
+    """安全加载 MGF：先替换 PEPMASS=None，再交给 load_from_mgf"""
+    # 读取原文件
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-    # --- 先根据 (latin_name, precursor_mz) 去重，保留强度最高 ---
+    # 替换 PEPMASS=None
+    new_lines = []
+    for line in lines:
+        if line.strip().upper().startswith("PEPMASS=") and "NONE" in line.upper():
+            new_lines.append("PEPMASS=0\n")
+        else:
+            new_lines.append(line)
+
+    # 写入临时文件
+    with tempfile.NamedTemporaryFile("w+", delete=False, encoding="utf-8", suffix=".mgf") as tmp:
+        tmp.writelines(new_lines)
+        tmp_path = tmp.name
+
+    # 加载谱图
+    spectra = list(load_from_mgf(tmp_path))
+
+    # 删除临时文件
+    os.unlink(tmp_path)
+
+    return spectra
+
+def load_all_spectra_from_folder(mgf_dir):
+    """遍历文件夹，安全加载所有 MGF 谱图"""
+    all_spectra = []
+    for mgf_file in Path(mgf_dir).glob("*.mgf"):
+        all_spectra.extend(safe_load_from_mgf(mgf_file))
+    return all_spectra
+
+# ---------------- 主处理函数 ----------------
+def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index_path: str, max_workers: int = None):
+    """加载谱图 -> 去重 -> 计算向量 -> 过滤 -> 保存 pickle 和索引"""
+    print(f"\n📂 Loading spectra from {mgf_dir} ...")
+    all_spectra = load_all_spectra_from_folder(mgf_dir)
+    print(f"✔️ Loaded {len(all_spectra)} spectra (PEPMASS fixed if needed).")
+
+    # --- 去重，根据 (latin_name, precursor_mz) 保留强度最高 ---
     spec_dict = {}
     for spec in all_spectra:
         meta = spec.metadata
@@ -92,7 +130,7 @@ def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index
             else:
                 filter_logs.append(f"{source_file}\t{title}\t{reason}")
 
-    print(f"➡️  Got {len(raw_spectra)} non-empty spectra with vectors.")
+    print(f"➡️ Got {len(raw_spectra)} non-empty spectra with vectors.")
 
     # 转换为数组并过滤全零向量
     vectors = np.array(raw_vectors).astype("float32")
@@ -102,14 +140,14 @@ def process_plant_spectra(mgf_dir: str, model_path: str, pickle_path: str, index
     vectors = vectors[valid_mask]
     valid_spectra = [spec for i, spec in enumerate(raw_spectra) if valid_mask[i]]
 
-    # 把被过滤掉的零向量也记日志
+    # 被过滤掉的零向量也记日志
     for i, keep in enumerate(valid_mask):
         if not keep:
             title = raw_spectra[i].metadata.get("title", f"spectrum_{i}")
             source_file = raw_spectra[i].metadata.get("source_file", "unknown_file")
             filter_logs.append(f"{source_file}\t{title}\tzero vector")
 
-    print(f"✅ Final spectra saved to pkl: {len(valid_spectra)} / {len(all_spectra)}")
+    print(f"✅ Final spectra saved to pickle: {len(valid_spectra)} / {len(all_spectra)}")
 
     # 💾 保存谱图对象（保证与索引一一对应）
     with open(pickle_path, "wb") as f:

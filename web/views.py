@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.core.cache import cache
 from .models import CompoundLibrary
 from django.db.models.functions import Lower
-from django.db.models import Q 
+from django.db.models import Q, Min
 from django.core.paginator import Paginator
 from web.utils.plotting import plot_ref_mol, generate_spectrum_comparison, format_latin_name
 import re
@@ -28,31 +28,23 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit import DataStructs
 import warnings
-from django.db.models import Min
+from django.http import JsonResponse
 
-
-def _fallback_mz(pepmass):
-    """从 PEPMASS 字段提取 m/z（返回 float 或 None）"""
-    if pepmass in (None, ""):
-        return None
-    if isinstance(pepmass, (list, tuple)):
-        pepmass = pepmass[0]
-    # 匹配第一个数字（支持科学计数法）
-    m = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", str(pepmass))
-    return float(m.group()) if m else None
-
-def _canon(s: str | None) -> str:
-    """大小写、空白、全半角统一后的 key"""
-    if not s:
-        return ""
-    # 全形 -> 半形
-    s = unicodedata.normalize("NFKC", s)
-    return s.strip().casefold()          # casefold 比 lower 更“彻底”
 
 def compound_list(request):
-    query = request.GET.get("query", "")
-    field = request.GET.get("field", "standard")
+    return render(request, "web/compound_list.html")
 
+def compound_list_api(request):
+    draw = int(request.GET.get("draw", 1))
+    start = int(request.GET.get("start", 0))
+    length = int(request.GET.get("length", 20))
+
+    # ===== 列搜索 =====
+    search_standard = request.GET.get("columns[1][search][value]", "").strip()
+    search_database = request.GET.get("columns[2][search][value]", "").strip()
+    search_smiles = request.GET.get("columns[3][search][value]", "").strip()
+
+    # ===== 基础 queryset（不带搜索）=====
     base_qs = (
         CompoundLibrary.objects
         .filter(spectrum_type__iexact="standard")
@@ -60,71 +52,103 @@ def compound_list(request):
         .exclude(plants=[])
     )
 
-    if query:
-        lookups = {
-            "standard": Q(standard__icontains=query),
-            "precursor_mz": Q(precursor_mz__icontains=query),
-            "database": Q(database__icontains=query),
-            "smiles": Q(smiles__icontains=query),
-        }
-        base_qs = base_qs.filter(lookups.get(field, Q()))
-
-    qs = (
+    # ===== recordsTotal（⚠️ 不加搜索）=====
+    records_total = (
         base_qs
         .values("standard")
+        .distinct()
+        .count()
+    )
+
+    # ===== 加搜索条件 =====
+    qs = base_qs
+    if search_standard:
+        qs = qs.filter(standard__icontains=search_standard)
+    if search_smiles:
+        qs = qs.filter(smiles__icontains=search_smiles)
+    if search_database:
+        qs = qs.filter(database__icontains=search_database)
+
+    # ===== recordsFiltered =====
+    records_filtered = (
+        qs
+        .values("standard")
+        .distinct()
+        .count()
+    )
+
+    # ===== 分页 + 去重 =====
+    qs = (
+        qs.values("standard")
         .annotate(
             first_id=Min("id"),
             smiles=Min("smiles"),
         )
-        .order_by(Lower("standard"))
+        .order_by(Lower("standard"))[start:start + length]
     )
 
-    paginator = Paginator(qs, 20)
-    page_obj = paginator.get_page(request.GET.get("page"))
-
-    # ==== database 合并（只针对当前页）====
-    standards = [row["standard"] for row in page_obj]
-
+    # ===== database 合并 =====
+    standards = [r["standard"] for r in qs]
     db_map = defaultdict(set)
+
     db_qs = (
         CompoundLibrary.objects
         .filter(standard__in=standards)
         .values("standard", "database")
     )
 
-    for row in db_qs:
-        if row["database"]:
-            db = row["database"].lower()
-            if db in {"nist20", "nist"}:
-                db_map[row["standard"]].add("NIST")
+    for r in db_qs:
+        if r["database"]:
+            db = r["database"].lower()
+            if db in {"nist", "nist20"}:
+                db_map[r["standard"]].add("NIST")
             else:
-                db_map[row["standard"]].add(db.upper())
+                db_map[r["standard"]].add(db.upper())
 
-    rows = []
-    for row in page_obj:
+    # ===== 返回数据 =====
+    data = []
+    for i, row in enumerate(qs, start=start + 1):
         std = row["standard"]
-        rows.append({
+        data.append({
+            "index": i,
             "standard": std or "(unknown)",
-            "first_id": row["first_id"],
-            "smiles": row["smiles"],
-            "plants": None,
             "database": ", ".join(sorted(db_map.get(std, []))) or "-",
+            "smiles": row["smiles"] or "-",
+            "action": (
+                f'<a class="btn btn-sm btn-outline-primary" '
+                f'href="/compound/{row["first_id"]}/">View</a>'
+            )
         })
 
-    return render(request, "web/compound_list.html", {
-        "compounds": rows,
-        "page_obj": page_obj,
-        "query": query,
-        "field": field,
-        "no_result": query and paginator.count == 0,
+    return JsonResponse({
+        "draw": draw,
+        "recordsTotal": records_total,
+        "recordsFiltered": records_filtered,
+        "data": data
     })
 
+def plant_list(request):
+    return render(request, "web/plant_list.html")
 
+def plant_list_api(request):
+    draw = int(request.GET.get("draw", 1))
+    start = int(request.GET.get("start", 0))
+    length = int(request.GET.get("length", 20))
 
-def herb_list(request):
-    query = request.GET.get("query", "").strip()
+    # ===== 列搜索参数 =====
+    search_latin = request.GET.get("columns[1][search][value]", "").strip().lower()
+    search_chinese = request.GET.get("columns[2][search][value]", "").strip().lower()
+    search_tissue = request.GET.get("columns[3][search][value]", "").strip().lower()
 
-    # 1️⃣ 只取【标品库 + 有 plants 的记录】
+    # ===== 排序 =====
+    order_col = int(request.GET.get("order[0][column]", 1))
+    order_dir = request.GET.get("order[0][dir]", "asc")
+
+    columns = ["index", "latin_name", "chinese_name", "tissue"]
+    order_field = columns[order_col] if order_col < len(columns) else "latin_name"
+    reverse = (order_dir == "desc")
+
+    # ===== 1️⃣ 聚合 plants（来自 CompoundLibrary）=====
     qs = (
         CompoundLibrary.objects
         .filter(spectrum_type="standard")
@@ -133,8 +157,7 @@ def herb_list(request):
         .values("plants")
     )
 
-    # 2️⃣ 聚合：latin_name → tissues
-    herb_map = {}  # latin_name -> {"chinese_name": ..., "tissues": set()}
+    plant_map = {}
 
     for row in qs:
         for p in row["plants"]:
@@ -145,46 +168,80 @@ def herb_list(request):
             if not latin:
                 continue
 
-            # 搜索（只在植物名层面）
-            if query and query.lower() not in latin.lower():
-                continue
+            key = latin.lower()
 
-            if latin not in herb_map:
-                herb_map[latin] = {
+            if key not in plant_map:
+                plant_map[key] = {
                     "latin_name": latin,
-                    "chinese_name": chinese,
+                    "chinese_name": chinese or "-",
                     "tissues": set(),
                 }
 
             if tissue:
-                herb_map[latin]["tissues"].add(tissue)
+                plant_map[key]["tissues"].add(tissue)
 
-    # 3️⃣ 转为模板可用列表
+    # ===== recordsTotal（不加搜索）=====
+    records_total = len(plant_map)
+
+    # ===== 2️⃣ 构建行数据 + 列搜索 =====
     rows = []
-    for herb in herb_map.values():
-        rows.append({
-            "latin_name": herb["latin_name"],
-            "latin_lower": herb["latin_name"].lower(),
-            "chinese_name": herb["chinese_name"] or "-",
-            "tissue": ", ".join(sorted(herb["tissues"])) or "-",
+    for h in plant_map.values():
+        tissue_str = ", ".join(
+            t.strip().capitalize()
+            for t in sorted(h["tissues"])
+        ) or "-"
+
+        row = {
+            "latin_name": h["latin_name"],
+            "chinese_name": h["chinese_name"],
+            "tissue": tissue_str,
+        }
+
+        # --- 列搜索（AND 逻辑） ---
+        if search_latin and search_latin not in row["latin_name"].lower():
+            continue
+        if search_chinese and search_chinese not in row["chinese_name"].lower():
+            continue
+        if search_tissue and search_tissue not in row["tissue"].lower():
+            continue
+
+        rows.append(row)
+
+    # ===== recordsFiltered =====
+    records_filtered = len(rows)
+
+    # ===== 3️⃣ 排序 =====
+    if order_field != "index":
+        rows.sort(
+            key=lambda x: x[order_field].lower(),
+            reverse=reverse
+        )
+
+    # ===== 4️⃣ 分页 =====
+    page_rows = rows[start:start + length]
+
+    # ===== 5️⃣ DataTables 数据 =====
+    data = []
+    for i, row in enumerate(page_rows, start=start + 1):
+        data.append({
+            "index": i,
+            "latin_name": row["latin_name"],
+            "chinese_name": row["chinese_name"],
+            "tissue": row["tissue"],
+            "action": (
+                f'<a class="btn btn-sm btn-outline-primary" '
+                f'href="/plant/{row["latin_name"]}/">View</a>'
+            )
         })
 
-    # 4️⃣ 排序
-    rows.sort(key=lambda x: x["latin_lower"])
-
-    # 5️⃣ 分页
-    paginator = Paginator(rows, 20)
-    page_obj = paginator.get_page(request.GET.get("page"))
-
-    return render(request, "web/herb_list.html", {
-        "page_obj": page_obj,
-        "herbs": page_obj.object_list,
-        "query": query,
-        "no_result": query and paginator.count == 0,
+    return JsonResponse({
+        "draw": draw,
+        "recordsTotal": records_total,
+        "recordsFiltered": records_filtered,
+        "data": data
     })
 
-
-def herb_detail(request, latin_name):
+def plant_detail(request, latin_name):
     """
     展示所有 plants 中包含该植物的化合物
     """
@@ -239,7 +296,7 @@ def herb_detail(request, latin_name):
     paginator = Paginator(rows, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    return render(request, "web/herb_detail.html", {
+    return render(request, "web/plant_detail.html", {
         "latin_name": latin_name,
         "compounds": page_obj.object_list,
         "page_obj": page_obj,
@@ -304,7 +361,7 @@ def search(request):
             latin = p.get("latin_name", "")
             chinese = p.get("chinese_name", "")
             if (latin and query.lower() in latin.lower()) or (chinese and query in chinese):
-                return redirect(reverse("herb_detail", args=[latin]))
+                return redirect(reverse("plant_detail", args=[latin]))
 
     # ======================================================
     # 3️⃣ 都没找到
@@ -468,7 +525,7 @@ from django.utils.text import slugify
 from urllib.parse import unquote
 import numpy as np
 
-def herb_compound_detail(request, latin_name, compound_id):
+def plant_compound_detail(request, latin_name, compound_id):
     """
     只展示【某一个植物(pid)】与【当前化合物】的谱图对比
     """
@@ -561,7 +618,7 @@ def herb_compound_detail(request, latin_name, compound_id):
     # ------------------------------------------------
     # Step 7：渲染模板
     # ------------------------------------------------
-    return render(request, "web/herb_compound_detail.html", {
+    return render(request, "web/plant_compound_detail.html", {
         "compound": compound_name,  # ✅ 显示化合物名称
         "latin_name": format_latin_name(plant.get("latin_name", "")),
         "entries": [entry],
@@ -943,8 +1000,11 @@ def msms_result(request):
     # ======================================================
     try:
         msms_input = request.GET.get("msms_spectrum", "").strip()
+        print("msms_input:", msms_input)
         parent_mz  = request.GET.get("parent_mz")
+        print("parent_mz:", parent_mz)
         ion_mode   = request.GET.get("ion_mode", "").lower().strip()
+        print("ion_mode:", ion_mode)
 
         peaks = []
         for line in msms_input.splitlines():
@@ -971,10 +1031,13 @@ def msms_result(request):
         )
 
         spectrum = normalize_intensities(spectrum)
+        print("Normalized intensities:", spectrum.intensities)
         spectrum = select_by_mz(spectrum, mz_from=50, mz_to=2000)
+        print("Selected by mz:", spectrum.mz)
         spectrum = require_minimum_number_of_peaks(
             spectrum, n_required=3
         )
+        print("Required minimum number of peaks:", spectrum)
 
         if spectrum is None:
             raise ValueError("Spectrum discarded after preprocessing.")
@@ -989,10 +1052,13 @@ def msms_result(request):
     # 2️⃣ 谱图搜索（标准品库）
     # ======================================================
     raw_results = identify_spectrums([spectrum])
+    print(f"Total raw results: {len(raw_results)}")
     filtered = [
         r for r in raw_results
         if r.get("score", 0) >= 0.6
     ]
+    print(f"Found {len(filtered)} results")
+    print(f"Filtered results: {filtered}")
 
     if not filtered:
         return render(request, "web/msms_result.html", {
