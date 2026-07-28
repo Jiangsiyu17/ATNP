@@ -10,6 +10,7 @@ urlpatterns = [
     path('plants/', views.plant_list, name='plant_list'),
     path("plants/api/", views.plant_list_api, name="plant_list_api"),
     path('plant/<str:latin_name>/', views.plant_detail, name='plant_detail'),
+    path("api/plant/<str:latin_name>/", views.plant_detail_api),
 
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
@@ -26,7 +27,9 @@ urlpatterns = [
 
     path('molecular_weight_query/', views.molecular_weight_query, name='molecular_weight_query'),
     path('molecular_weight_search/', views.molecular_weight_search, name='molecular_weight_search'),
+    path("mw/api/", views.mw_api, name="mw_api"),
 
     path('msms_search/', views.msms_search, name='msms_search'),
     path('msms_result/', views.msms_result, name='msms_result'),
+
 ]

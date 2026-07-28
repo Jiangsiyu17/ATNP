@@ -1,3 +1,4 @@
+## 化合物所在文献部分加载pkl
 import pickle
 
 INDEX_PATH = "/data2/jiangsiyu/ATNP_Database/pubmed_index.pkl"

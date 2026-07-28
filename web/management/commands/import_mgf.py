@@ -1,10 +1,14 @@
 # web/management/commands/import_mgf.py
 from django.core.management.base import BaseCommand
+from django.db import close_old_connections, transaction
 from matchms.importing import load_from_mgf
 from web.models import CompoundLibrary
 import pickle
 from tqdm import tqdm
 import logging
+
+BATCH_SIZE = 100
+
 
 def safe_float(x):
     try:
@@ -21,9 +25,10 @@ class Command(BaseCommand):
     def handle(self, mgf_path, **opts):
         logging.getLogger("matchms").setLevel(logging.ERROR)
 
-        spectra = list(load_from_mgf(mgf_path))
+        batch = []
+        imported = 0
 
-        for spec in tqdm(spectra, desc="Importing MGF"):
+        for spec in tqdm(load_from_mgf(mgf_path), desc="Importing MGF"):
             meta = {k.lower(): v for k, v in spec.metadata.items()}
 
             compound_name = meta.get("standard") or meta.get("name") or meta.get("title") or "unknown"
@@ -41,7 +46,7 @@ class Command(BaseCommand):
                       or safe_float(meta.get("precursor_mz")) \
                       or None
 
-            obj = CompoundLibrary(
+            batch.append(CompoundLibrary(
                 title         = meta.get("title") or compound_name,
                 standard      = meta.get('standard') or compound_name,
                 spectrum_type = "sample",
@@ -60,7 +65,26 @@ class Command(BaseCommand):
                     for m, i in zip(spec.peaks.mz, spec.peaks.intensities)
                 ],
                 matched_spectrum_id = msid
-            )
-            obj.save()
+            ))
 
-        self.stdout.write(self.style.SUCCESS("✓ Sample MGF imported"))
+            if len(batch) >= BATCH_SIZE:
+                self._insert_batch(batch)
+                imported += len(batch)
+                batch = []
+                close_old_connections()
+
+        if batch:
+            self._insert_batch(batch)
+            imported += len(batch)
+
+        self.stdout.write(
+            self.style.SUCCESS(f"✓ Imported {imported} sample spectra")
+        )
+
+    @staticmethod
+    def _insert_batch(batch):
+        with transaction.atomic():
+            CompoundLibrary.objects.bulk_create(
+                batch,
+                batch_size=BATCH_SIZE,
+            )

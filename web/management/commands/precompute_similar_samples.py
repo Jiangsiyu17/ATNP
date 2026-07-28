@@ -14,14 +14,35 @@ class Command(BaseCommand):
         results_pos = {}
         results_neg = {}
 
-        qs = CompoundLibrary.objects.exclude(peaks=None)
+        results_pos = {}
+        results_neg = {}
 
-        for compound in tqdm(qs, desc="Precomputing"):
+        base_qs = CompoundLibrary.objects.filter(
+            spectrum_type__iexact="standard"
+        ).exclude(
+            peaks=None
+        )
+
+        total = base_qs.count()
+
+        qs = base_qs.iterator(
+            chunk_size=500
+        )
+
+        for compound in tqdm(
+            qs,
+            total=total,
+            desc="Precomputing"
+        ):
+
             spectrum = compound.get_spectrum()
+
             if spectrum is None:
                 continue
 
-            ionmode = (compound.ionmode or "positive").lower()
+            ionmode = (
+                compound.ionmode or "positive"
+            ).lower()
 
             res = find_most_similar_spectrum(
                 spectrum,
@@ -34,12 +55,21 @@ class Command(BaseCommand):
                 results_neg[compound.id] = res
 
         with open(OUT_POS, "wb") as f:
-            pickle.dump(results_pos, f)
+            pickle.dump(
+                results_pos,
+                f
+            )
 
         with open(OUT_NEG, "wb") as f:
-            pickle.dump(results_neg, f)
+            pickle.dump(
+                results_neg,
+                f
+            )
 
-        self.stdout.write(self.style.SUCCESS(
-            f"✅ Precompute finished: "
-            f"pos={len(results_pos)}, neg={len(results_neg)}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"✅ finished: "
+                f"pos={len(results_pos)} "
+                f"neg={len(results_neg)}"
+            )
+        )

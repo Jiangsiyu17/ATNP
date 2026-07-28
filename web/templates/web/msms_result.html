@@ -22,7 +22,8 @@
                 <th style="min-width: 140px;">Precursor m/z</th>
                 <th style="min-width: 120px;">Ion mode</th>
                 <th style="min-width: 140px;">Database</th>
-                <th style="min-width: 220px;">SMILES</th>
+                <th style="min-width: 180px;">SMILES</th>
+                <th style="min-width: 100px;">Antitumor</th>
                 <th style="min-width: 120px;">MS/MS Score</th>
                 <th style="min-width: 90px;">Detail</th>
             </tr>
@@ -30,20 +31,29 @@
 
         <tbody>
         {% for r in results %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>
-                    <a href="{% url 'compound_detail' r.id %}" class="text-decoration-none">{{ r.compound_name|default:"-" }}</a>
-                </td>
-                <td>{{ r.precursor_mz|default:"-" }}</td>
-                <td>{{ r.ionmode|default:"-" }}</td>
-                <td>{{ r.database|default:"-" }}</td>
-                <td style="font-family: monospace; font-size: 0.85em;">{{ r.smiles|default:"-" }}</td>
-                <td><span class="badge bg-success">{{ r.best_score }}</span></td>
-                <td class="text-center">
-                    <a href="{% url 'compound_detail' r.id %}" class="btn btn-sm btn-outline-primary">View</a>
-                </td>
-            </tr>
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>
+                <a href="{% url 'compound_detail' r.id %}" class="text-decoration-none">
+                    {{ r.compound_name|default:"-" }}
+                </a>
+            </td>
+            <td>{{ r.precursor_mz|default:"-" }}</td>
+            <td>{{ r.ionmode|default:"-" }}</td>
+            <td>
+                {% with r.database|lower as db %}
+                    {% if db in "nist nist20" %}NIST{% elif db == "in-house" %}ATNP{% else %}{{ db|upper }}{% endif %}
+                {% endwith %}
+            </td>
+            <td style="font-family: monospace; font-size: 0.85em; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {{ r.smiles|default:"-" }}
+            </td>
+            <td>{{ r.antitumor|yesno:"True,False" }}</td>
+            <td><span class="badge bg-success">{{ r.best_score }}</span></td>
+            <td class="text-center">
+                <a href="{% url 'compound_detail' r.id %}" class="btn btn-sm btn-outline-primary">View</a>
+            </td>
+        </tr>
         {% endfor %}
         </tbody>
 

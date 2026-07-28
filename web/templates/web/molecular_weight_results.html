@@ -1,45 +1,121 @@
 {% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Molecular Weight Results{% endblock %}
+
 {% block content %}
-
-<h3 class="mt-4">Molecular Weight Search Results</h3>
-<hr>
-
-{% if results %}
-<div class="table-responsive mt-3">
-    <table class="table table-striped table-bordered table-hover align-middle">
-        <thead class="table-light">
-            <tr>
-                <th style="min-width: 60px;">#</th>
-                <th style="min-width: 200px;">Compound Name</th>
-                <!-- <th style="min-width: 140px;">Precursor m/z</th>
-                <th style="min-width: 120px;">Ion mode</th> -->
-                <th style="min-width: 140px;">Database</th>
-                <th style="min-width: 220px;">SMILES</th>
-                <th style="min-width: 90px;">Detail</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for r in results %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>{{ r.compound_name }}</td>
-                <!-- <td>{{ r.precursor_mz|default:"-" }}</td> -->
-                <!-- <td>{{ r.ionmode|default:"-" }}</td> -->
-                <td>{{ r.database|default:"-" }}</td>
-                <td style="font-family: monospace; font-size: 0.85em;">{{ r.smiles|default:"-" }}</td>
-                <td class="text-center">
-                    <a href="{% url 'compound_detail' r.first_id %}" class="btn btn-sm btn-outline-primary">View</a>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-
-    </table>
+<div style="font-size:20px;margin:40px 0 20px;border-bottom:2px solid #eee;">
+    Molecular Weight Results
 </div>
 
-{% else %}
-<p class="text-danger mt-4">No compounds found.</p>
-{% endif %}
+<div class="table-responsive">
+    <table id="compoundTable"
+           class="table w-100 table-striped table-bordered table-hover">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Compound name</th>
+                <th>Database</th>
+                <th>Smiles</th>
+                <th>Molecular Weight</th>
+                <th>Antitumor</th>
+                <th>Ion mode</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <th></th>
+                <th><input class="form-control form-control-sm" placeholder="Search"></th>
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="nist">NIST</option>
+                        <option value="gnps">GNPS</option>
+                        <option value="atnp">ATNP</option>
+                    </select>
+                </th>
+                <th><input class="form-control form-control-sm" placeholder="Search"></th>
+                <th></th>
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="true">True</option>
+                        <option value="false">False</option>
+                    </select>
+                </th>
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="positive">Positive</option>
+                        <option value="negative">Negative</option>
+                    </select>
+                </th>
+                <th></th>
+            </tr>
+        </thead>
+    </table>
+</div>
+{% endblock %}
 
-<hr>
+{% block extra_js %}
+<script>
+$(function () {
+
+    const table = $('#compoundTable').DataTable({
+        serverSide: true,
+        processing: true,
+        ajax: {
+            url: "{% url 'mw_api' %}",
+            data: function (d) {
+                // ✅ 每次请求动态读取 URL（关键！！）
+                const urlParams = new URLSearchParams(window.location.search);
+                d.mw_min = urlParams.get("mw_min");
+                d.mw_max = urlParams.get("mw_max");
+            }
+        },
+        pageLength: 20,
+        orderCellsTop: true,
+        dom: 'lrtip',
+        scrollX: true,
+        autoWidth: false,
+        columns: [
+            { data: "index", orderable: false },
+            { data: "standard" },
+            { data: "database" },
+            { data: "smiles" },
+            { data: "mw" }, 
+            { data: "antitumor" },
+            { data: "ionmode" },
+            { data: "action", orderable: false }
+        ],
+        stateSave: true
+    });
+
+    // ===== 列筛选 =====
+    table.columns().every(function () {
+        const column = this;
+        const headerCell = $(column.header())
+            .closest('thead')
+            .find('tr:eq(1) th')
+            .eq(column.index());
+
+        const input = headerCell.find('input');
+        const select = headerCell.find('select');
+
+        if (input.length) {
+            input.on('keyup', function (e) {
+                if (e.key === 'Enter') {
+                    column.search(this.value).draw();
+                }
+            });
+        }
+
+        if (select.length) {
+            select.on('change', function () {
+                const val = $(this).val().toLowerCase();
+                column.search(val, false, false).draw();
+            });
+        }
+    });
+});
+</script>
 {% endblock %}

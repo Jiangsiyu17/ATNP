@@ -25,11 +25,10 @@ logger.info("identify.py loaded (lazy & low-mem version)")
 MODEL_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5"
 MODEL_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5"
 
-REFS_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_1.pickle"
-REFS_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_1.pickle"
-
-HNSW_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_1.bin"
-HNSW_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_1.bin"
+REFS_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_2.pickle"
+REFS_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_2.pickle"
+HNSW_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_2.bin"
+HNSW_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_2.bin"
 
 VECTOR_DIM = 300
 
@@ -159,27 +158,74 @@ def find_most_similar_spectrum(spectrum, ionmode="positive", n_decimals=2):
     except Exception as e:
         logger.error(f"Model/index/refs load failed ({mode}): {e}")
         return []
+    
+    from matchms.filtering import normalize_intensities
+
+    # 保证 intensity 被归一化
+    spectrum = normalize_intensities(spectrum)
 
     # 构建 spec2vec 向量
     sdoc = SpectrumDocument(spectrum, n_decimals=n_decimals)
-    vec = calc_vector(model, sdoc, allowed_missing_percentage=100)
+    vec = calc_vector(
+        model,
+        sdoc,
+        allowed_missing_percentage=100
+    )
 
-    if vec is None or np.linalg.norm(vec) == 0:
+    if vec is None:
         return []
 
-    xq = np.asarray(vec, dtype="float32").reshape(1, -1)
-    xq /= np.linalg.norm(xq)
+    norm = np.linalg.norm(vec)
 
-    idxs, distances = hnsw.knn_query(xq, k=500)
+    if norm == 0 or not np.isfinite(norm):
+        return []
+
+    xq = np.asarray(
+        vec,
+        dtype=np.float32
+    ).reshape(1,-1)
+
+    xq /= norm
+
+    if not np.isfinite(xq).all():
+        return []
+
+    num_elements = min(
+        hnsw.get_current_count(),
+        len(references)
+    )
+
+    if num_elements == 0:
+        return []
+
+    k = min(
+        50,
+        num_elements
+    )
+
+    # 保证 ef >= k
+    hnsw.set_ef(
+        max(
+            k + 50,
+            500
+        )
+    )
+
+    try:
+        idxs, distances = hnsw.knn_query(xq,k=k)
+    except Exception as e:
+        print( "HNSW failed:", spectrum.metadata.get( "title" ), e)
+        return []
 
     results = []
     for idx, dist in zip(idxs[0], distances[0]):
-        ref_vec = hnsw.get_items([idx])[0]
-        ref_vec = ref_vec / np.linalg.norm(ref_vec)
 
-        cosine = float(np.dot(xq[0], ref_vec))
+        cosine = 1 - (dist / 2)
 
-        score = round(cosine, 5)
+        score = round(
+            float(cosine),
+            5
+        )
 
         if score <= 0.6:
             continue
@@ -193,9 +239,20 @@ def find_most_similar_spectrum(spectrum, ionmode="positive", n_decimals=2):
             or meta.get("pepmass")
             or meta.get("PEPMASS")
         )
+
+        query_precursor = (
+            spectrum.metadata.get("precursor_mz")
+            or spectrum.metadata.get("PRECURSOR_MZ")
+            or spectrum.metadata.get("pepmass")
+            or spectrum.metadata.get("PEPMASS")
+        )
+
         try:
-            query_precursor = float(query_precursor) if query_precursor else None
-        except Exception:
+            query_precursor = (
+                float(query_precursor)
+                if query_precursor else None
+            )
+        except:
             query_precursor = None
 
         if query_precursor is not None and precursor_mz is not None:

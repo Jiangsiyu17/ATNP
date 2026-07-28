@@ -4,146 +4,240 @@
 {% block title %}{{ latin_name }} - Related Compounds{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 1400px;">
 
-    <div style="font-size: 20px; margin: 40px 0 20px; border-bottom: 2px solid #eeeeee; padding-bottom: 9px;">
-        Compounds related to "{{ latin_name }}"
-    </div>
-
-    <!-- 分页信息和导航 -->
-    <div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-    <div class="page_info">
-        Displaying
-        <b>{{ page_obj.start_index }} - {{ page_obj.end_index }}</b>
-        of <b>{{ page_obj.paginator.count }}</b> in total
-    </div>
-
-    <ul class="pagination pagination-sm mb-0">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
-        </li>
-        {% endif %}
-
-        {% if page_obj.number > 3 %}
-        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
-        {% if page_obj.number > 4 %}
-            <li class="page-item disabled"><a class="page-link" href="#">…</a></li>
-        {% endif %}
-        {% endif %}
-
-        {% for num in page_obj.paginator.page_range %}
-        {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
-            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-            </li>
-        {% endif %}
-        {% endfor %}
-
-        {% if page_obj.number < page_obj.paginator.num_pages|add:"-2" %}
-        {% if page_obj.number < page_obj.paginator.num_pages|add:"-3" %}
-            <li class="page-item disabled"><a class="page-link" href="#">…</a></li>
-        {% endif %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
-            {{ page_obj.paginator.num_pages }}
-            </a>
-        </li>
-        {% endif %}
-
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
-        </li>
-        {% endif %}
-    </ul>
-    </div>
-
-
-    <div class="table-responsive mt-4">
-        {% if not compounds %}
-            <p class="text-danger">No compounds found.</p>
-        {% endif %}
-
-        <table class="table w-100 table-striped table-bordered table-hover">
-            <thead>
-                <tr>
-                    <th style="min-width: 60px;">#</th>
-                    <th style="min-width: 200px;">Compound name</th>
-                    <th style="min-width: 160px;">Database</th>
-                    <th style="min-width: 200px;">Smiles</th>
-                    <th style="min-width: 120px;"></th>
-                </tr>
-            </thead>
-
-            <tbody>
-                {% for compound in compounds %}
-                <tr>
-                    <td>{{ forloop.counter }}</td>
-                    <td>{{ compound.standard }}</td>
-                    <td>{{ compound.database|upper }}</td>
-                    <td style="font-family: monospace; font-size: 0.85em;">{{ compound.smiles }}</td>
-                    <td>
-                        <a href="{% url 'compound_detail' compound.id %}" class="btn btn-sm btn-outline-primary">View</a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center text-muted">No compounds found.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <!-- 分页信息和导航 -->
-    <div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-    <div class="page_info">
-        Displaying
-        <b>{{ page_obj.start_index }} - {{ page_obj.end_index }}</b>
-        of <b>{{ page_obj.paginator.count }}</b> in total
-    </div>
-
-    <ul class="pagination pagination-sm mb-0">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Prev</a>
-        </li>
-        {% endif %}
-
-        {% if page_obj.number > 3 %}
-        <li class="page-item"><a class="page-link" href="?page=1">1</a></li>
-        {% if page_obj.number > 4 %}
-            <li class="page-item disabled"><a class="page-link" href="#">…</a></li>
-        {% endif %}
-        {% endif %}
-
-        {% for num in page_obj.paginator.page_range %}
-        {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
-            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-            </li>
-        {% endif %}
-        {% endfor %}
-
-        {% if page_obj.number < page_obj.paginator.num_pages|add:"-2" %}
-        {% if page_obj.number < page_obj.paginator.num_pages|add:"-3" %}
-            <li class="page-item disabled"><a class="page-link" href="#">…</a></li>
-        {% endif %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
-            {{ page_obj.paginator.num_pages }}
-            </a>
-        </li>
-        {% endif %}
-
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
-        </li>
-        {% endif %}
-    </ul>
-    </div>
-
+<div style="font-size:20px;margin:40px 0 20px;border-bottom:2px solid #eee;">
+    Compounds related to "{{ latin_name }}"
 </div>
+
+<div class="table-responsive">
+    <table id="plantTable"
+           class="table w-100 table-striped table-bordered table-hover">
+
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Compound name</th>
+                <th>Precursor m/z</th>
+                <th>Database</th>
+                <th>Smiles</th>
+                <th>Antitumor</th>
+                <th>Ion mode</th>
+                <th>Details</th>
+            </tr>
+
+            <tr>
+                <th></th>
+
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search compound name">
+                </th>
+
+                <th></th>
+
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="nist">NIST</option>
+                        <option value="gnps">GNPS</option>
+                        <option value="atnp">ATNP</option>
+                    </select>
+                </th>
+
+                <th>
+                    <input class="form-control form-control-sm"
+                           placeholder="Search smiles">
+                </th>
+
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="true">True</option>
+                        <option value="false">False</option>
+                    </select>
+                </th>
+
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="positive">Positive</option>
+                        <option value="negative">Negative</option>
+                    </select>
+                </th>
+
+                <th></th>
+            </tr>
+        </thead>
+
+        <tbody></tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+$(function () {
+
+    const table = $('#plantTable').DataTable({
+        serverSide: true,
+        processing: true,
+        stateSave: true,
+        stateDuration: -1,
+        ajax: "/api/plant/{{ latin_name }}/",
+        pageLength: 20,
+        orderCellsTop: true,
+        dom: 'lrtip',
+        autoWidth: false,
+        scrollX: true,
+
+        columns: [
+            {
+                data: "index",
+                orderable: false,
+                width: "60px"
+            },
+            {
+                data: "standard",
+                width: "260px",
+                render: function (data) {
+                    return data
+                        ? `<span title="${data}">${data}</span>`
+                        : "";
+                }
+            },
+            {
+                data: "precursor_mz",
+                width: "120px"
+            },
+            {
+                data: "database",
+                width: "90px"
+            },
+            {
+                data: "smiles",
+                width: "320px",
+                render: function (data) {
+                    return data
+                        ? `<span title="${data}">${data}</span>`
+                        : "";
+                }
+            },
+            {
+                data: "antitumor",
+                width: "90px"
+            },
+            {
+                data: "ionmode",
+                width: "110px"
+            },
+            {
+                data: "action",
+                orderable: false,
+                width: "100px"
+            }
+        ],
+
+        initComplete: function () {
+            const api = this.api();
+
+            api.columns().every(function () {
+                const column = this;
+
+                const headerCell = $(column.header())
+                    .closest('thead')
+                    .find('tr:eq(1) th')
+                    .eq(column.index());
+
+                const currentSearch = column.search();
+
+                const input = headerCell.find('input');
+                const select = headerCell.find('select');
+
+                // ======================
+                // INPUT
+                // ======================
+                if (input.length) {
+                    if (currentSearch) {
+                        input.val(currentSearch);
+                    }
+
+                    input.off('keyup').on('keyup', function (e) {
+                        if (e.key === 'Enter') {
+                            if (column.search() !== this.value) {
+                                column.search(this.value).draw();
+                            }
+                        }
+                    });
+                }
+
+                // ======================
+                // SELECT
+                // ======================
+                if (select.length) {
+                    if (currentSearch) {
+                        select.val(currentSearch);
+                    }
+
+                    select.off('change').on('change', function () {
+                        const val = ($(this).val() || '').toLowerCase();
+
+                        if (column.search() !== val) {
+                            column.search(val, false, false).draw();
+                        }
+                    });
+                }
+
+            });
+        }
+    });
+
+});
+</script>
+
+
+<style>
+/* =========================
+   Table Base Style
+========================= */
+
+#plantTable tbody td {
+    font-size: 14px;
+}
+
+/* =========================
+   Column width + truncate
+========================= */
+
+#plantTable td:nth-child(2) {
+    max-width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#plantTable td:nth-child(5) {
+    max-width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* keep numeric / short columns clean */
+#plantTable td:nth-child(1),
+#plantTable td:nth-child(3),
+#plantTable td:nth-child(4),
+#plantTable td:nth-child(6),
+#plantTable td:nth-child(7),
+#plantTable td:nth-child(8) {
+    white-space: nowrap;
+}
+
+/* header no wrap */
+#plantTable th {
+    white-space: nowrap;
+}
+</style>
+
 {% endblock %}

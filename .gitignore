@@ -1,10 +1,4 @@
-Herbs/
-model/
-model_copy/
-crawler/
-.pkl
-
-
+# Python缓存
 __pycache__/
 *.pyc
 

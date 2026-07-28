@@ -14,11 +14,11 @@ class CompoundLibrary(models.Model):
     # ─────────────────────────────
     # 基础标识
     # ─────────────────────────────
-    standard_id = models.CharField(max_length=50, null=True, blank=True)
-    matched_spectrum_id = models.CharField(max_length=50, null=True, blank=True)
+    standard_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    matched_spectrum_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
 
     title = models.CharField(
-        max_length=255, blank=True, null=True, db_index=True
+        max_length=255, blank=True, null=True, db_index=False
     )
 
     # ─────────────────────────────
@@ -89,6 +89,13 @@ class CompoundLibrary(models.Model):
 
     rtinseconds = models.FloatField(blank=True, null=True)
     pepmass = models.CharField(max_length=255, blank=True, null=True)
+    mw = models.FloatField(null=True, blank=True, db_index=True)
+
+    antitumor = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Whether the compound is antitumor"
+    )
 
     # ─────────────────────────────
     # 谱图类型
@@ -108,55 +115,64 @@ class CompoundLibrary(models.Model):
     spectrum_blob = models.BinaryField(blank=True, null=True)
     peaks = models.JSONField(blank=True, null=True)
 
-    # 植物来源（结构搜索不参与）
-    plants = models.JSONField(blank=True, null=True)
+    # # 植物来源（结构搜索不参与）
+    # plants = models.JSONField(blank=True, null=True)
 
-    class Meta:
-        indexes = [
-            models.Index(fields=["title", "spectrum_type"]),
-        ]
 
     # ─────────────────────────────
     # matchms Spectrum 还原
     # ─────────────────────────────
-    def get_spectrum(self) -> Spectrum | None:
-        """
-        从 spectrum_blob（优先）或 peaks 还原为 matchms Spectrum
-        并确保强度已归一化（spec2vec 必需）
-        """
+    def get_spectrum(self):
+
+        if not self.spectrum_blob:
+
+            return None
+
         try:
-            # ---------- 1️⃣ 优先使用 spectrum_blob ----------
-            if self.spectrum_blob:
-                spectrum = pickle.loads(self.spectrum_blob)
 
-                # ⭐ 确保 blob 里的谱图也被归一化
-                spectrum = normalize_intensities(spectrum)
-                return spectrum
+            obj = pickle.loads(
+                self.spectrum_blob
+            )
 
-            # ---------- 2️⃣ 从 peaks 构建 ----------
-            if self.peaks:
-                mz = [p["mz"] for p in self.peaks]
-                intensities = [p["int"] for p in self.peaks]
+            # 旧数据库
+            if isinstance(
+                obj,
+                Spectrum
+            ):
 
-                metadata = {
-                    "precursor_mz": self.precursor_mz,
-                    "smiles": self.smiles,
-                    "name": self.standard,
-                    "ionmode": self.ionmode,
-                    "compound_id": self.id,
-                }
+                return obj
 
-                spectrum = Spectrum(
-                    mz=np.array(mz, dtype=float),
-                    intensities=np.array(intensities, dtype=float),
-                    metadata=metadata,
+            # 新数据库(dict)
+            if isinstance(
+                obj,
+                dict
+            ):
+
+                return Spectrum(
+
+                    mz=np.array(
+                        obj.get(
+                            "mz",
+                            []
+                        )
+                    ),
+
+                    intensities=np.array(
+                        obj.get(
+                            "intensities",
+                            []
+                        )
+                    ),
+
+                    metadata=obj.get(
+                        "metadata",
+                        {}
+                    )
+
                 )
 
-                # ⭐⭐ 关键：强度归一化 ⭐⭐
-                spectrum = normalize_intensities(spectrum)
-                return spectrum
+            return None
 
-        except Exception as e:
-            print(f"[get_spectrum error] ID={self.id}: {e}")
+        except Exception:
 
-        return None
+            return None

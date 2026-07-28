@@ -9,12 +9,12 @@ from web.models import CompoundLibrary
 MODEL_DIR = "/data2/jiangsiyu/ATNP_Database/model"
 
 # 谱图库（Spectrum对象列表）
-POS_SPECTRA_PATH = os.path.join(MODEL_DIR, "herbs_spectra_pos.pickle")
-NEG_SPECTRA_PATH = os.path.join(MODEL_DIR, "herbs_spectra_neg.pickle")
+POS_SPECTRA_PATH = os.path.join(MODEL_DIR, "herbs_spectra_pos_2.pickle")
+NEG_SPECTRA_PATH = os.path.join(MODEL_DIR, "herbs_spectra_neg_2.pickle")
 
 # 索引文件
-POS_INDEX_PATH = os.path.join(MODEL_DIR, "herbs_index_pos.bin")
-NEG_INDEX_PATH = os.path.join(MODEL_DIR, "herbs_index_neg.bin")
+POS_INDEX_PATH = os.path.join(MODEL_DIR, "herbs_index_pos_2.bin")
+NEG_INDEX_PATH = os.path.join(MODEL_DIR, "herbs_index_neg_2.bin")
 
 # spec2vec模型文件（示例路径，请根据实际改）
 POS_SPEC2VEC_PATH = os.path.join(MODEL_DIR, "Ms2Vec_allGNPSpositive.hdf5")

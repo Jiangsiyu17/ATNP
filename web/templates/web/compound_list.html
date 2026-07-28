@@ -13,22 +13,24 @@
     <table id="compoundTable"
            class="table w-100 table-striped table-bordered table-hover">
         <thead>
-            <!-- 表头 -->
             <tr>
-                <th style="width: 80px;">#</th>
+                <th>#</th>
                 <th>Compound name</th>
                 <th>Database</th>
                 <th>Smiles</th>
+                <th>Antitumor</th>
+                <th>Ion mode</th>
                 <th>Details</th>
             </tr>
 
-            <!-- 搜索行 -->
             <tr>
                 <th></th>
+
                 <th>
                     <input class="form-control form-control-sm"
                            placeholder="Search compound name">
                 </th>
+
                 <th>
                     <select class="form-select form-select-sm">
                         <option value="">All</option>
@@ -37,10 +39,28 @@
                         <option value="atnp">ATNP</option>
                     </select>
                 </th>
+
                 <th>
                     <input class="form-control form-control-sm"
                            placeholder="Search smiles">
                 </th>
+
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="true">True</option>
+                        <option value="false">False</option>
+                    </select>
+                </th>
+
+                <th>
+                    <select class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="positive">Positive</option>
+                        <option value="negative">Negative</option>
+                    </select>
+                </th>
+
                 <th></th>
             </tr>
         </thead>
@@ -57,55 +77,137 @@ $(function () {
     const table = $('#compoundTable').DataTable({
         serverSide: true,
         processing: true,
+        stateSave: true,
+        stateDuration: -1,
         ajax: "{% url 'compound_list_api' %}",
         pageLength: 20,
         orderCellsTop: true,
-        lengthMenu: [10, 20, 50, 100],
-
-        searching: true,     // ✅ 必须开启
-        dom: 'lrtip',        // ✅ 隐藏默认搜索框
-
+        dom: 'lrtip',
+        autoWidth: false,
+        scrollX: true,
         columns: [
-            { data: "index", orderable: false },
-            { data: "standard" },
-            { data: "database" },
-            { data: "smiles", className: "smiles-cell" },
-            { data: "action", orderable: false }
-        ]
-    });
-
-    // ===== 输入框：回车触发搜索 =====
-    $('#compoundTable thead tr:eq(1) input').each(function (idx) {
-        $(this).on('keyup', function (e) {
-            if (e.key === 'Enter') {
-                table
-                    .column(idx + 1) // 跳过 #
-                    .search(this.value)
-                    .draw();
+            {
+                data: "index",
+                orderable: false,
+                width: "60px"
+            },
+            {
+                data: "standard",
+                width: "260px",
+                render: data => data
+                    ? `<span title="${data}">${data}</span>`
+                    : ""
+            },
+            {
+                data: "database",
+                width: "90px"
+            },
+            {
+                data: "smiles",
+                width: "320px",
+                render: data => data
+                    ? `<span title="${data}">${data}</span>`
+                    : ""
+            },
+            {
+                data: "antitumor",
+                width: "90px"
+            },
+            {
+                data: "ionmode",
+                width: "110px"
+            },
+            {
+                data: "action",
+                orderable: false,
+                width: "100px"
             }
-        });
-    });
+        ],
 
-    // ===== 下拉框：change 即搜索（database 列）=====
-    $('#compoundTable thead tr:eq(1) select').on('change', function () {
-        table
-            .column(2)
-            .search(this.value)
-            .draw();
+        initComplete: function () {
+            const api = this.api();
+
+            api.columns().every(function () {
+                const column = this;
+
+                const headerCell = $(column.header())
+                    .closest('thead')
+                    .find('tr:eq(1) th')
+                    .eq(column.index());
+
+                const currentSearch = column.search();
+
+                const select = headerCell.find('select');
+                if (select.length) {
+                    if (currentSearch) {
+                        select.val(currentSearch);
+                    }
+
+                    select.off('change').on('change', function () {
+                        const val = ($(this).val() || '').toLowerCase();
+
+                        if (column.search() !== val) {
+                            column.search(val, false, false).draw();
+                        }
+                    });
+                }
+
+                const input = headerCell.find('input');
+                if (input.length) {
+                    if (currentSearch) {
+                        input.val(currentSearch);
+                    }
+
+                    input.off('keyup').on('keyup', function (e) {
+                        if (e.key === 'Enter') {
+                            if (column.search() !== this.value) {
+                                column.search(this.value).draw();
+                            }
+                        }
+                    });
+                }
+            });
+        }
     });
 
 });
 </script>
 
 <style>
-#compoundTable tbody td.smiles-cell {
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 13px;
+/* 字体 */
+#compoundTable tbody td {
+    font-size: 14px;
+}
+
+/* Compound name 列折叠 */
+#compoundTable td:nth-child(2) {
+    max-width: 260px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* SMILES 列折叠 */
+#compoundTable td:nth-child(4) {
     max-width: 320px;
-    overflow-x: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 其他列紧凑 */
+#compoundTable td:nth-child(1),
+#compoundTable td:nth-child(3),
+#compoundTable td:nth-child(5),
+#compoundTable td:nth-child(6),
+#compoundTable td:nth-child(7) {
+    white-space: nowrap;
+}
+
+/* 表头不换行 */
+#compoundTable th {
+    white-space: nowrap;
 }
 </style>
 
-<hr>
 {% endblock %}

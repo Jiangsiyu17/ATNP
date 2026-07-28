@@ -1,4 +1,3 @@
-# 样品在上，标品在下
 import sys
 import os
 
@@ -37,7 +36,7 @@ def plot_2_spectrum_from_file(file1, file2, loss=False):
 
 import base64
 
-img_base64 = plot_2_spectrum_from_file("/data2/jiangsiyu/ATNP_Database/web/utils/text_result/specB.mgf", "/data2/jiangsiyu/ATNP_Database/web/utils/text_result/specA.mgf")
+img_base64 = plot_2_spectrum_from_file("/data2/jiangsiyu/ATNP_Database/web/utils/text_result/specA.mgf", "/data2/jiangsiyu/ATNP_Database/web/utils/text_result/specB.mgf")
 
 with open("/data2/jiangsiyu/ATNP_Database/web/utils/text_result/mirror_plot.png", "wb") as f:
     f.write(base64.b64decode(img_base64))

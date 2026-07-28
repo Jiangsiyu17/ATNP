@@ -5,11 +5,23 @@
 
 {% block content %}
 <style>
-  th {
+  /* ✅ 原来的全局 th（保留，但作用范围缩小） */
+  .table th {
     white-space: nowrap !important;
     width: 1% !important;
     min-width: 140px !important;
     padding-right: 50px !important;
+  }
+
+  /* ✅ 🔥 专门覆盖 PubMed（关键） */
+  table.pubmed-table th {
+    min-width: 0 !important;
+    width: auto !important;
+    padding-right: 8px !important;
+  }
+
+  table.pubmed-table td {
+    padding: 6px 8px !important;
   }
 
   .table-info > th,
@@ -183,7 +195,7 @@
   </thead>
   <tr class="table-secondary fw-bold">
     <th>#</th><th>Chinese Name</th><th>Latin Name</th>
-    <th>Tissue</th><th>Precursor m/z</th><th>Ion mode</th>
+    <th>Tissue</th><th>Precursor m/z</th>
     <th>Similarity</th><th></th>
   </tr>
   <tbody>
@@ -194,7 +206,6 @@
       <td>{{ s.latin_name }}</td>
       <td>{{ s.tissue }}</td>
       <td>{{ s.precursor_mz|floatformat:4 }}</td>
-      <td>{{ s.ionmode }}</td>
       <td>{{ s.score|floatformat:3 }}</td>
       <td>
         <a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}"
@@ -245,6 +256,108 @@
 </div>
 {% endif %}
 
-<script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+<br><br>
+
+
+<!-- ================= Publications ================= -->
+<table class="table w-100 table-bordered table-hover mb-4 pubmed-table">
+
+  <!-- ✅ 列宽控制 -->
+  <colgroup>
+    <col style="width:50px;">   <!-- 序号 -->
+    <col>                       <!-- 标题 -->
+    <col style="width:120px;">   <!-- 按钮 -->
+  </colgroup>
+
+  <thead class="table-info">
+    <tr>
+      <th class="text-center fs-5 py-2" colspan="3">
+        Related Publications
+      </th>
+    </tr>
+  </thead>
+
+  <tr class="table-secondary fw-bold">
+    <th>#</th>
+    <th>Title</th>
+    <th></th>
+  </tr>
+
+  <tbody>
+    {% for p in pubmed_page.object_list %}
+    <tr>
+      <!-- 序号 -->
+      <td class="text-center align-middle">
+        {{ forloop.counter0|add:pubmed_page.start_index }}
+      </td>
+
+      <!-- 标题 -->
+      <td style="line-height:1.4; word-break: break-word;">
+        {{ p.title }}
+        <br>
+        <small class="text-muted">{{ p.journal }}</small>
+      </td>
+
+      <!-- 按钮（⚠️ 已压缩） -->
+      <td class="text-center align-middle">
+        <a href="https://pubmed.ncbi.nlm.nih.gov/{{ p.pmid }}/"
+           target="_blank"
+           class="btn btn-sm btn-outline-primary px-2 py-1">
+           🔗PubMed
+        </a>
+      </td>
+    </tr>
+    {% empty %}
+      <tr>
+        <td colspan="3" class="text-center text-muted">
+          No publications found
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
+
+  <div class="page_info">
+    Displaying <b>{{ pubmed_page.start_index }} - {{ pubmed_page.end_index }}</b>
+    of <b>{{ pubmed_page.paginator.count }}</b>
+  </div>
+
+  <ul class="pagination pagination-sm mb-0">
+
+    {% if pubmed_page.has_previous %}
+      <li class="page-item">
+        <a class="page-link"
+          href="?pubmed_page={{ pubmed_page.previous_page_number }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
+          ‹ Prev
+        </a>
+      </li>
+    {% endif %}
+
+    {% for num in pubmed_page.paginator.page_range %}
+      {% if num >= pubmed_page.number|add:"-2" and num <= pubmed_page.number|add:"2" %}
+      <li class="page-item {% if num == pubmed_page.number %}active{% endif %}">
+        <a class="page-link"
+          href="?pubmed_page={{ num }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
+          {{ num }}
+        </a>
+      </li>
+      {% endif %}
+    {% endfor %}
+
+    {% if pubmed_page.has_next %}
+      <li class="page-item">
+        <a class="page-link"
+          href="?pubmed_page={{ pubmed_page.next_page_number }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
+          Next ›
+        </a>
+      </li>
+    {% endif %}
+
+  </ul>
+</div>
+
+
 <hr>
 {% endblock %}
