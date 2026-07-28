@@ -240,44 +240,55 @@ def plant_list_api(request):
     order_field = columns[order_col] if order_col < len(columns) else "latin_name"
     reverse = (order_dir == "desc")
 
-    qs = CompoundLibrary.objects.filter(
-        spectrum_type="sample"
-    )
+    # 聚合结果短期缓存，避免进入页面和翻页时重复扫描全部 sample。
+    cache_key = "plant_list:aggregated:v1"
+    all_rows = cache.get(cache_key)
 
-    plant_map = {}
+    if all_rows is None:
+        # 只从远程数据库读取列表需要的三个小字段，避免加载谱图等大字段。
+        qs = CompoundLibrary.objects.filter(
+            spectrum_type="sample"
+        ).values_list(
+            "latin_name",
+            "chinese_name",
+            "tissue",
+        )
 
-    for row in qs:
-        latin = (row.latin_name or "").strip()
-        chinese = (row.chinese_name or "").strip()
-        tissue = (row.tissue or "").strip()
+        plant_map = {}
+        for latin, chinese, tissue in qs.iterator(chunk_size=2000):
+            latin = (latin or "").strip()
+            chinese = (chinese or "").strip()
+            tissue = (tissue or "").strip()
 
-        if not latin:
-            continue
+            if not latin:
+                continue
 
-        key = latin.lower()
+            key = latin.lower()
+            if key not in plant_map:
+                plant_map[key] = {
+                    "latin_name": latin,
+                    "chinese_name": chinese or "-",
+                    "tissues": set(),
+                }
 
-        if key not in plant_map:
-            plant_map[key] = {
-                "latin_name": latin.strip(),
-                "chinese_name": chinese or "-",
-                "tissues": set(),
+            if tissue:
+                plant_map[key]["tissues"].add(tissue)
+
+        all_rows = [
+            {
+                "latin_name": plant["latin_name"],
+                "chinese_name": plant["chinese_name"],
+                "tissue": ", ".join(sorted(plant["tissues"])) or "-",
             }
+            for plant in plant_map.values()
+        ]
+        cache.set(cache_key, all_rows, timeout=300)
 
-        if tissue:
-            plant_map[key]["tissues"].add(tissue)
+    records_total = len(all_rows)
 
-
-    # ===== 2️⃣ 构建行数据 + 列搜索 =====
+    # ===== 列搜索 =====
     rows = []
-    for h in plant_map.values():
-
-        tissue_str = ", ".join(sorted(h["tissues"])) or "-"
-
-        row = {
-            "latin_name": h["latin_name"],
-            "chinese_name": h["chinese_name"],
-            "tissue": tissue_str,
-        }
+    for row in all_rows:
 
         if search_latin and search_latin not in row["latin_name"].lower():
             continue
@@ -307,7 +318,7 @@ def plant_list_api(request):
 
     return JsonResponse({
         "draw": draw,
-        "recordsTotal": len(rows),
+        "recordsTotal": records_total,
         "recordsFiltered": len(rows),
         "data": data
     })
