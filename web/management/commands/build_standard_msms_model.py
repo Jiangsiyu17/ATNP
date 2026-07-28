@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from web.models import CompoundLibrary
 
 from matchms import Spectrum
@@ -19,7 +20,7 @@ from spec2vec import SpectrumDocument
 from spec2vec.vector_operations import calc_vector
 
 
-MODEL_DIR = "/data2/jiangsiyu/ATNP_Database/model"
+MODEL_DIR = settings.BASE_DIR / "model"
 
 
 IONMODES = {

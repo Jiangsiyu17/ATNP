@@ -1,4 +1,5 @@
 import pickle
+from pathlib import Path
 
 def safe_parse_pepmass(pepmass):
     try:
@@ -33,5 +34,6 @@ def fix_precursor_mz_in_pickle(pickle_path: str):
     print(f"✅ 修复完成：已添加 precursor_mz 至 {fixed} 个谱图。")
 
 if __name__ == "__main__":
-    fix_precursor_mz_in_pickle("/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos.pickle")
-    fix_precursor_mz_in_pickle("/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg.pickle")
+    project_root = Path(__file__).resolve().parents[2]
+    fix_precursor_mz_in_pickle(project_root / "model" / "herbs_spectra_pos.pickle")
+    fix_precursor_mz_in_pickle(project_root / "model" / "herbs_spectra_neg.pickle")

@@ -1,6 +1,9 @@
 import pickle
+from pathlib import Path
 
-with open("/data2/jiangsiyu/ATNP_Database/model_copy/herbs_spectra_neg.pickle", "rb") as f:
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+with (PROJECT_ROOT / "model_copy" / "herbs_spectra_neg.pickle").open("rb") as f:
     spectra = pickle.load(f)
 
 print(f"Total spectra: {len(spectra)}")

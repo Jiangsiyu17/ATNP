@@ -219,241 +219,6 @@ def compound_list_api(request):
         "data": data
     })
 
-def plant_list(request):
-    return render(request, "web/plant_list.html")
-
-def plant_list_api(request):
-    draw = int(request.GET.get("draw", 1))
-    start = int(request.GET.get("start", 0))
-    length = int(request.GET.get("length", 20))
-
-    # ===== 列搜索参数 =====
-    search_latin = request.GET.get("columns[1][search][value]", "").strip().lower()
-    search_chinese = request.GET.get("columns[2][search][value]", "").strip().lower()
-    search_tissue = request.GET.get("columns[3][search][value]", "").strip().lower()
-
-    # ===== 排序 =====
-    order_col = int(request.GET.get("order[0][column]", 1))
-    order_dir = request.GET.get("order[0][dir]", "asc")
-
-    columns = ["index", "latin_name", "chinese_name", "tissue"]
-    order_field = columns[order_col] if order_col < len(columns) else "latin_name"
-    reverse = (order_dir == "desc")
-
-    # 聚合结果短期缓存，避免进入页面和翻页时重复扫描全部 sample。
-    cache_key = "plant_list:aggregated:v1"
-    all_rows = cache.get(cache_key)
-
-    if all_rows is None:
-        # 只从远程数据库读取列表需要的三个小字段，避免加载谱图等大字段。
-        qs = CompoundLibrary.objects.filter(
-            spectrum_type="sample"
-        ).values_list(
-            "latin_name",
-            "chinese_name",
-            "tissue",
-        )
-
-        plant_map = {}
-        for latin, chinese, tissue in qs.iterator(chunk_size=2000):
-            latin = (latin or "").strip()
-            chinese = (chinese or "").strip()
-            tissue = (tissue or "").strip()
-
-            if not latin:
-                continue
-
-            key = latin.lower()
-            if key not in plant_map:
-                plant_map[key] = {
-                    "latin_name": latin,
-                    "chinese_name": chinese or "-",
-                    "tissues": set(),
-                }
-
-            if tissue:
-                plant_map[key]["tissues"].add(tissue)
-
-        all_rows = [
-            {
-                "latin_name": plant["latin_name"],
-                "chinese_name": plant["chinese_name"],
-                "tissue": ", ".join(sorted(plant["tissues"])) or "-",
-            }
-            for plant in plant_map.values()
-        ]
-        cache.set(cache_key, all_rows, timeout=300)
-
-    records_total = len(all_rows)
-
-    # ===== 列搜索 =====
-    rows = []
-    for row in all_rows:
-
-        if search_latin and search_latin not in row["latin_name"].lower():
-            continue
-        if search_chinese and search_chinese not in row["chinese_name"].lower():
-            continue
-        if search_tissue and search_tissue not in row["tissue"].lower():
-            continue
-
-        rows.append(row)
-
-    rows.sort(key=lambda x: x[order_field].lower(), reverse=reverse)
-
-    page_rows = rows[start:start + length]
-
-    data = []
-    for i, row in enumerate(page_rows, start=start + 1):
-        data.append({
-            "index": i,
-            "latin_name": row["latin_name"],
-            "chinese_name": row["chinese_name"],
-            "tissue": row["tissue"],
-            "action": (
-                f'<a class="btn btn-sm btn-outline-primary" '
-                f'href="/plant/{row["latin_name"]}/">View</a>'
-            )
-        })
-
-    return JsonResponse({
-        "draw": draw,
-        "recordsTotal": records_total,
-        "recordsFiltered": len(rows),
-        "data": data
-    })
-
-
-def plant_detail_api(request, latin_name):
-    draw = int(request.GET.get("draw", 1))
-    start = int(request.GET.get("start", 0))
-    length = int(request.GET.get("length", 20))
-
-    search_standard = request.GET.get("columns[1][search][value]", "").strip()
-    search_database = request.GET.get("columns[3][search][value]", "").strip().lower()
-    search_smiles = request.GET.get("columns[4][search][value]", "").strip()
-    search_antitumor = request.GET.get("columns[5][search][value]", "").strip().lower()
-    search_ionmode = request.GET.get("columns[6][search][value]", "").strip().lower()
-
-    cache_suffix = hashlib.sha256(
-        latin_name.strip().lower().encode("utf-8")
-    ).hexdigest()
-    cache_key = f"plant_detail:compounds:v1:{cache_suffix}"
-    all_compounds = cache.get(cache_key)
-
-    if all_compounds is None:
-        # 第一条查询只获取该植物关联的 standard id，不加载 sample 谱图。
-        matched_ids = list(
-            CompoundLibrary.objects.filter(
-                spectrum_type="sample",
-                latin_name__iexact=latin_name,
-                matched_spectrum_id__isnull=False,
-            ).exclude(
-                matched_spectrum_id=""
-            ).values_list(
-                "matched_spectrum_id",
-                flat=True,
-            ).distinct()
-        )
-
-        # 第二条查询一次取回全部 standard，并且只读取列表展示所需字段。
-        standards = CompoundLibrary.objects.filter(
-            spectrum_type="standard",
-            standard_id__in=matched_ids,
-        ).order_by("id").values(
-            "id",
-            "standard_id",
-            "standard",
-            "precursor_mz",
-            "pepmass",
-            "database",
-            "smiles",
-            "antitumor",
-            "ionmode",
-        )
-
-        # 保持原逻辑：同一个 standard_id 只使用数据库中的第一条记录。
-        standard_map = {}
-        for compound in standards.iterator(chunk_size=1000):
-            standard_map.setdefault(compound["standard_id"], compound)
-
-        all_compounds = list(standard_map.values())
-        cache.set(cache_key, all_compounds, timeout=300)
-
-    records_total = len(all_compounds)
-    qs = all_compounds
-
-    # ======================================================
-    # 3️⃣ 过滤（全部基于 standard）
-    # ======================================================
-    if search_standard:
-        qs = [c for c in qs if search_standard.lower() in (c["standard"] or "").lower()]
-
-    if search_smiles:
-        qs = [c for c in qs if search_smiles.lower() in (c["smiles"] or "").lower()]
-
-    if search_database:
-        qs = [c for c in qs if search_database in (c["database"] or "").lower()]
-
-    if search_antitumor in {"true", "false"}:
-        flag = (search_antitumor == "true")
-        qs = [c for c in qs if c["antitumor"] == flag]
-
-    if search_ionmode in {"positive", "negative"}:
-        qs = [c for c in qs if (c["ionmode"] or "").lower() == search_ionmode]
-
-    # ======================================================
-    # 4️⃣ 排序（安全版）
-    # ======================================================
-    qs.sort(key=lambda x: (x["standard"] or "").lower())
-    records_filtered = len(qs)
-
-    page_qs = qs[start:start + length]
-
-    # ======================================================
-    # 5️⃣ 返回数据（全部 standard）
-    # ======================================================
-    data = []
-    for i, c in enumerate(page_qs, start=start + 1):
-
-        # precursor
-        if c["precursor_mz"]:
-            precursor = f'{c["precursor_mz"]:.4f}'
-        elif c["pepmass"]:
-            try:
-                precursor = f'{float(c["pepmass"].split()[0]):.4f}'
-            except:
-                precursor = c["pepmass"]
-        else:
-            precursor = "-"
-
-        db = (c["database"] or "-").upper().replace("NIST20", "NIST")
-
-        data.append({
-            "index": i,
-            "standard": c["standard"] or "(unknown)",
-            "precursor_mz": precursor,
-            "database": db,
-            "smiles": c["smiles"] or "-",
-            "antitumor": "True" if c["antitumor"] else "False",
-            "ionmode": (c["ionmode"] or "-").lower(),
-
-            # ⭐ 修复跳转（关键！！！）
-            "action": f'<a class="btn btn-sm btn-outline-primary" href="/compound/{c["id"]}/">View</a>'
-        })
-
-    return JsonResponse({
-        "draw": draw,
-        "recordsTotal": records_total,
-        "recordsFiltered": records_filtered,
-        "data": data
-    })
-
-def plant_detail(request, latin_name):
-    return render(request, "web/plant_detail.html", {
-        "latin_name": latin_name,
-    })
-
 
 def home(request):
     return render(request, 'web/home.html')
@@ -536,6 +301,24 @@ from web.utils.similar_cache import get_similar_samples
 
 from web.utils.pubmed_utils import get_pubmed_papers
 
+
+def parse_precursor_mz(precursor_mz, pepmass):
+    """Return a display-safe precursor m/z without failing the whole page."""
+    if precursor_mz is not None:
+        try:
+            return round(float(precursor_mz), 4)
+        except (TypeError, ValueError):
+            pass
+
+    if pepmass:
+        try:
+            return round(float(str(pepmass).split()[0]), 4)
+        except (TypeError, ValueError, IndexError):
+            pass
+
+    return "-"
+
+
 def compound_detail(request, pk):
     logger = logging.getLogger(__name__)
     logger.info(f"→ Enter compound_detail, pk={pk}")
@@ -577,6 +360,7 @@ def compound_detail(request, pk):
             "latin_name",
             "tissue",
             "matched_spectrum_id",
+            "precursor_mz",
             "pepmass",
             "ionmode",
         )
@@ -590,7 +374,7 @@ def compound_detail(request, pk):
                 "tissue": s.tissue.capitalize() if s.tissue else "-",
                 "matched_id": s.matched_spectrum_id,
                 "latin_slug": slugify(raw_latin) if raw_latin else "unknown-plant",
-                "precursor_mz": round(float(s.pepmass),4) if s.pepmass else "-",
+                "precursor_mz": parse_precursor_mz(s.precursor_mz, s.pepmass),
                 "ionmode": s.ionmode or "-"
             })
     uniq={}
@@ -698,92 +482,6 @@ from django.utils.text import slugify
 from urllib.parse import unquote
 import numpy as np
 
-
-def plant_compound_detail(request, latin_name, compound_id):
-
-    # =====================================================
-    # 0️⃣ pid
-    # =====================================================
-    pid = request.GET.get("pid")
-    if not pid:
-        raise Http404("pid is required")
-
-    try:
-        pid = int(pid)
-    except ValueError:
-        raise Http404("invalid pid")
-
-    # =====================================================
-    # 1️⃣ compound
-    # =====================================================
-    compound_obj = get_object_or_404(CompoundLibrary, pk=compound_id)
-    compound_name = compound_obj.standard
-
-    # =====================================================
-    # 2️⃣ sample
-    # =====================================================
-    sample_obj = get_object_or_404(
-        CompoundLibrary,
-        pk=pid,
-        spectrum_type="sample"
-    )
-
-    sample_spec = sample_obj.get_spectrum()
-    if not sample_spec:
-        raise Http404("Sample spectrum not found")
-
-    # =====================================================
-    # 3️⃣ standard spectrum
-    # =====================================================
-    standard_spec = compound_obj.get_spectrum()
-
-    # =====================================================
-    # 4️⃣ database logic
-    # =====================================================
-    dbs = (compound_obj.database or "").lower().split()
-
-    nist_like = {"nist", "nist20"}
-
-    is_nist_only = all(
-        db in nist_like
-        for db in dbs
-    )
-
-    # =====================================================
-    # 5️⃣ plot
-    # =====================================================
-    try:
-        if is_nist_only or not standard_spec:
-            img_base64 = plot_single_spectrum(sample_spec)
-        else:
-            img_base64 = plot_2_spectrum(sample_spec, standard_spec)
-
-        if not img_base64:
-            raise RuntimeError("Empty image")
-
-    except Exception as e:
-        raise RuntimeError(f"Spectrum plotting failed: {e}")
-
-    # =====================================================
-    # 6️⃣ 单 entry（关键简化）
-    # =====================================================
-    entry = {
-        "id": sample_obj.id,
-        "chinese_name": sample_obj.chinese_name or "-",
-        "latin_name": format_latin_name(sample_obj.latin_name or "-"),
-        "tissue": sample_obj.tissue or "-",
-        "score": sample_obj.score or 0,
-        "image": img_base64,   # ⭐ 直接放进去
-    }
-
-    # =====================================================
-    # 7️⃣ render
-    # =====================================================
-    return render(request, "web/plant_compound_detail.html", {
-        "compound": compound_name,
-        "latin_name": entry["latin_name"],
-        "entry": entry,
-    })
 
 
 from django.shortcuts import get_object_or_404, render
@@ -1253,11 +951,12 @@ import hnswlib
 from spec2vec import SpectrumDocument
 from spec2vec.vector_operations import calc_vector
 import os
+from django.conf import settings
 
 
 
 # ================== 预加载模型和索引 ==================
-MODEL_DIR = "/data2/jiangsiyu/ATNP_Database/model"
+MODEL_DIR = settings.BASE_DIR / "model"
 
 IONMODES = {
     "positive": {

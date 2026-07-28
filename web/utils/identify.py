@@ -10,6 +10,7 @@
 import logging
 import pickle
 import numpy as np
+from django.conf import settings
 from gensim.models import KeyedVectors
 from hnswlib import Index
 from spec2vec import SpectrumDocument
@@ -22,13 +23,14 @@ logger.info("identify.py loaded (lazy & low-mem version)")
 # =====================================================
 # 路径配置
 # =====================================================
-MODEL_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5"
-MODEL_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5"
+MODEL_DIR = settings.BASE_DIR / "model"
+MODEL_POS_PATH = MODEL_DIR / "Ms2Vec_allGNPSpositive.hdf5"
+MODEL_NEG_PATH = MODEL_DIR / "Ms2Vec_allGNPSnegative.hdf5"
 
-REFS_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_2.pickle"
-REFS_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_2.pickle"
-HNSW_POS_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_2.bin"
-HNSW_NEG_PATH = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_2.bin"
+REFS_POS_PATH = MODEL_DIR / "herbs_spectra_pos_2.pickle"
+REFS_NEG_PATH = MODEL_DIR / "herbs_spectra_neg_2.pickle"
+HNSW_POS_PATH = MODEL_DIR / "herbs_index_pos_2.bin"
+HNSW_NEG_PATH = MODEL_DIR / "herbs_index_neg_2.bin"
 
 VECTOR_DIM = 300
 
@@ -81,7 +83,7 @@ def get_model(mode):
     if mode not in _models:
         logger.info(f"[LOAD] spec2vec model ({mode})")
         path = MODEL_POS_PATH if mode == "pos" else MODEL_NEG_PATH
-        _models[mode] = KeyedVectors.load(path, mmap="r")  # ⭐ 省内存关键
+        _models[mode] = KeyedVectors.load(str(path), mmap="r")  # ⭐ 省内存关键
     return _models[mode]
 
 
@@ -90,7 +92,7 @@ def get_index(mode):
         logger.info(f"[LOAD] HNSW index ({mode})")
         idx = Index(space="l2", dim=VECTOR_DIM)
         path = HNSW_POS_PATH if mode == "pos" else HNSW_NEG_PATH
-        idx.load_index(path)
+        idx.load_index(str(path))
         idx.set_ef(300)
         _indexes[mode] = idx
     return _indexes[mode]

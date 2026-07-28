@@ -3,10 +3,11 @@ import hnswlib
 import pickle
 import os
 import numpy as np
+from django.conf import settings
 from .db_utils import calc_ms2vec_vector as spectrum_to_vector
 from web.models import CompoundLibrary
 
-MODEL_DIR = "/data2/jiangsiyu/ATNP_Database/model"
+MODEL_DIR = settings.BASE_DIR / "model"
 
 # 谱图库（Spectrum对象列表）
 POS_SPECTRA_PATH = os.path.join(MODEL_DIR, "herbs_spectra_pos_2.pickle")
@@ -90,4 +91,3 @@ def generate_spectrum_comparison(compound, top_k=20, score_threshold=None):
             except CompoundLibrary.DoesNotExist:
                 continue
     return results
-

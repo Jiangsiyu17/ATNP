@@ -1,6 +1,7 @@
 import pickle
+from pathlib import Path
 
-pkl_path = "/data2/jiangsiyu/ATNP_Database/model_copy/herbs_spectra_neg.pickle"
+pkl_path = Path(__file__).resolve().parents[2] / "model_copy" / "herbs_spectra_neg.pickle"
 
 with open(pkl_path, "rb") as f:
     data = pickle.load(f)

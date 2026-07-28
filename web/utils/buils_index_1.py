@@ -2,6 +2,7 @@
 # build_index.py 多进程版本，加载植物谱图并构建向量索引（PEPMASS=None 自动修复）
 
 import os
+from pathlib import Path
 import sys
 from concurrent.futures import ProcessPoolExecutor
 import pickle
@@ -22,14 +23,15 @@ from matchms import Spectrum
 from matchms.importing import load_from_mgf
 
 # ---------------- 路径配置 ----------------
-PLANT_POS_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/cleaned_mgf/pos"
-PLANT_NEG_DIR = "/data2/jiangsiyu/ATNP_Database/Herbs/cleaned_mgf/neg"
-MODEL_POS = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSpositive.hdf5"
-MODEL_NEG = "/data2/jiangsiyu/ATNP_Database/model/Ms2Vec_allGNPSnegative.hdf5"
-OUT_PICKLE_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_pos_2.pickle"
-OUT_PICKLE_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_spectra_neg_2.pickle"
-OUT_INDEX_POS = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_pos_2.bin"
-OUT_INDEX_NEG = "/data2/jiangsiyu/ATNP_Database/model/herbs_index_neg_2.bin"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PLANT_POS_DIR = str(PROJECT_ROOT / "Herbs" / "cleaned_mgf" / "pos")
+PLANT_NEG_DIR = str(PROJECT_ROOT / "Herbs" / "cleaned_mgf" / "neg")
+MODEL_POS = str(PROJECT_ROOT / "model" / "Ms2Vec_allGNPSpositive.hdf5")
+MODEL_NEG = str(PROJECT_ROOT / "model" / "Ms2Vec_allGNPSnegative.hdf5")
+OUT_PICKLE_POS = str(PROJECT_ROOT / "model" / "herbs_spectra_pos_2.pickle")
+OUT_PICKLE_NEG = str(PROJECT_ROOT / "model" / "herbs_spectra_neg_2.pickle")
+OUT_INDEX_POS = str(PROJECT_ROOT / "model" / "herbs_index_pos_2.bin")
+OUT_INDEX_NEG = str(PROJECT_ROOT / "model" / "herbs_index_neg_2.bin")
 
 # ---------------- 多进程全局模型 ----------------
 model = None

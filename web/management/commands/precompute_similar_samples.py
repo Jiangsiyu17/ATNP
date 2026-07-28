@@ -1,11 +1,12 @@
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from web.models import CompoundLibrary
 from web.utils.identify import find_most_similar_spectrum
 import pickle
 from tqdm import tqdm
 
-OUT_POS = "/data2/jiangsiyu/ATNP_Database/model/compound_similar_samples_pos.pickle"
-OUT_NEG = "/data2/jiangsiyu/ATNP_Database/model/compound_similar_samples_neg.pickle"
+OUT_POS = settings.BASE_DIR / "model" / "compound_similar_samples_pos.pickle"
+OUT_NEG = settings.BASE_DIR / "model" / "compound_similar_samples_neg.pickle"
 
 class Command(BaseCommand):
     help = "Precompute spec2vec similar plant spectra for all compounds (score > 0.6)"

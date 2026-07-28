@@ -1,5 +1,5 @@
 from django.urls import path, re_path
-from . import views
+from . import views, views_plants
 
 urlpatterns = [
     path('compound/list/', views.compound_list, name='compound_list'),
@@ -7,16 +7,16 @@ urlpatterns = [
     path("compounds/api/", views.compound_list_api, name="compound_list_api"),
 
 
-    path('plants/', views.plant_list, name='plant_list'),
-    path("plants/api/", views.plant_list_api, name="plant_list_api"),
-    path('plant/<str:latin_name>/', views.plant_detail, name='plant_detail'),
-    path("api/plant/<str:latin_name>/", views.plant_detail_api),
+    path('plants/', views_plants.plant_list, name='plant_list'),
+    path("plants/api/", views_plants.plant_list_api, name="plant_list_api"),
+    path('plant/<str:latin_name>/', views_plants.plant_detail, name='plant_detail'),
+    path("api/plant/<str:latin_name>/", views_plants.plant_detail_api),
 
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
 
     re_path(r"^plant/(?P<latin_name>[^/]+)/(?P<compound_id>[^/]+)/$",
-            views.plant_compound_detail, name="plant_compound_detail"),
+            views_plants.plant_compound_detail, name="plant_compound_detail"),
 
     path("similar/<int:compound_id>/<int:spectrum_idx>/",
          views.similar_compare, name="similar_compare"),

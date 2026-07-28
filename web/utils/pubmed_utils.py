@@ -1,11 +1,15 @@
 ## 化合物所在文献展示查询逻辑
 import json
-from .pubmed_loader import PUBMED_INDEX
 import re
 
+from django.conf import settings
+
+from .pubmed_loader import PUBMED_INDEX
+
+
 FILE_MAP = {
-    "N": "/data2/jiangsiyu/ATNP_Database/crawler/5_N_all_clean_pubmed_results.jsonl",
-    "P": "/data2/jiangsiyu/ATNP_Database/crawler/5_P_all_clean_pubmed_results.jsonl",
+    "N": settings.BASE_DIR / "crawler" / "5_N_all_clean_pubmed_results.jsonl",
+    "P": settings.BASE_DIR / "crawler" / "5_P_all_clean_pubmed_results.jsonl",
 }
 
 def normalize_title(title):
@@ -37,9 +41,11 @@ def get_pubmed_papers(compound_name):
     seen_titles = set()   # ✅ 新增：标题去重
 
     for item in PUBMED_INDEX[name]:
-        file_path = FILE_MAP[item["file"]]
+        file_path = FILE_MAP.get(item.get("file"))
+        if file_path is None or not file_path.is_file():
+            continue
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with file_path.open("r", encoding="utf-8") as f:
             f.seek(item["offset"])
             line = f.readline()
 

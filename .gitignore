@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 
+# collectstatic 生成目录
+/staticfiles/
+
 # 大数据
 *.mgf
 Herbs/
