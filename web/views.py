@@ -325,8 +325,6 @@ def plant_list_api(request):
 
 
 def plant_detail_api(request, latin_name):
-    print("LATIN NAME:", latin_name)
-
     draw = int(request.GET.get("draw", 1))
     start = int(request.GET.get("start", 0))
     length = int(request.GET.get("length", 20))
@@ -337,63 +335,78 @@ def plant_detail_api(request, latin_name):
     search_antitumor = request.GET.get("columns[5][search][value]", "").strip().lower()
     search_ionmode = request.GET.get("columns[6][search][value]", "").strip().lower()
 
-    # ======================================================
-    # 1️⃣ 找 sample（植物来源）
-    # ======================================================
-    samples = CompoundLibrary.objects.filter(
-        spectrum_type="sample",
-        latin_name__icontains=latin_name
-    )
+    cache_suffix = hashlib.sha256(
+        latin_name.strip().lower().encode("utf-8")
+    ).hexdigest()
+    cache_key = f"plant_detail:compounds:v1:{cache_suffix}"
+    all_compounds = cache.get(cache_key)
 
-    print("AFTER PLANT FILTER:", samples.count())
+    if all_compounds is None:
+        # 第一条查询只获取该植物关联的 standard id，不加载 sample 谱图。
+        matched_ids = list(
+            CompoundLibrary.objects.filter(
+                spectrum_type="sample",
+                latin_name__iexact=latin_name,
+                matched_spectrum_id__isnull=False,
+            ).exclude(
+                matched_spectrum_id=""
+            ).values_list(
+                "matched_spectrum_id",
+                flat=True,
+            ).distinct()
+        )
 
-    # ======================================================
-    # 2️⃣ 映射 standard（关键修复点🔥）
-    # ======================================================
-    std_map = {}
-
-    for s in samples:
-        sid = s.matched_spectrum_id
-        if not sid:
-            continue
-
-        std = CompoundLibrary.objects.filter(
+        # 第二条查询一次取回全部 standard，并且只读取列表展示所需字段。
+        standards = CompoundLibrary.objects.filter(
             spectrum_type="standard",
-            standard_id=sid
-        ).first()
+            standard_id__in=matched_ids,
+        ).order_by("id").values(
+            "id",
+            "standard_id",
+            "standard",
+            "precursor_mz",
+            "pepmass",
+            "database",
+            "smiles",
+            "antitumor",
+            "ionmode",
+        )
 
-        if not std:
-            continue
+        # 保持原逻辑：同一个 standard_id 只使用数据库中的第一条记录。
+        standard_map = {}
+        for compound in standards.iterator(chunk_size=1000):
+            standard_map.setdefault(compound["standard_id"], compound)
 
-        std_map[std.id] = std
+        all_compounds = list(standard_map.values())
+        cache.set(cache_key, all_compounds, timeout=300)
 
-    qs = list(std_map.values())
+    records_total = len(all_compounds)
+    qs = all_compounds
 
     # ======================================================
     # 3️⃣ 过滤（全部基于 standard）
     # ======================================================
     if search_standard:
-        qs = [c for c in qs if search_standard.lower() in (c.standard or "").lower()]
+        qs = [c for c in qs if search_standard.lower() in (c["standard"] or "").lower()]
 
     if search_smiles:
-        qs = [c for c in qs if search_smiles.lower() in (c.smiles or "").lower()]
+        qs = [c for c in qs if search_smiles.lower() in (c["smiles"] or "").lower()]
 
     if search_database:
-        qs = [c for c in qs if search_database in (c.database or "").lower()]
+        qs = [c for c in qs if search_database in (c["database"] or "").lower()]
 
     if search_antitumor in {"true", "false"}:
         flag = (search_antitumor == "true")
-        qs = [c for c in qs if c.antitumor == flag]
+        qs = [c for c in qs if c["antitumor"] == flag]
 
     if search_ionmode in {"positive", "negative"}:
-        qs = [c for c in qs if (c.ionmode or "").lower() == search_ionmode]
+        qs = [c for c in qs if (c["ionmode"] or "").lower() == search_ionmode]
 
     # ======================================================
     # 4️⃣ 排序（安全版）
     # ======================================================
-    qs.sort(key=lambda x: (x.standard or "").lower())
-
-    records_total = len(qs)
+    qs.sort(key=lambda x: (x["standard"] or "").lower())
+    records_filtered = len(qs)
 
     page_qs = qs[start:start + length]
 
@@ -404,35 +417,35 @@ def plant_detail_api(request, latin_name):
     for i, c in enumerate(page_qs, start=start + 1):
 
         # precursor
-        if c.precursor_mz:
-            precursor = f"{c.precursor_mz:.4f}"
-        elif c.pepmass:
+        if c["precursor_mz"]:
+            precursor = f'{c["precursor_mz"]:.4f}'
+        elif c["pepmass"]:
             try:
-                precursor = f"{float(c.pepmass.split()[0]):.4f}"
+                precursor = f'{float(c["pepmass"].split()[0]):.4f}'
             except:
-                precursor = c.pepmass
+                precursor = c["pepmass"]
         else:
             precursor = "-"
 
-        db = (c.database or "-").upper().replace("NIST20", "NIST")
+        db = (c["database"] or "-").upper().replace("NIST20", "NIST")
 
         data.append({
             "index": i,
-            "standard": c.standard or "(unknown)",
+            "standard": c["standard"] or "(unknown)",
             "precursor_mz": precursor,
             "database": db,
-            "smiles": c.smiles or "-",
-            "antitumor": "True" if c.antitumor else "False",
-            "ionmode": (c.ionmode or "-").lower(),
+            "smiles": c["smiles"] or "-",
+            "antitumor": "True" if c["antitumor"] else "False",
+            "ionmode": (c["ionmode"] or "-").lower(),
 
             # ⭐ 修复跳转（关键！！！）
-            "action": f'<a class="btn btn-sm btn-outline-primary" href="/compound/{c.id}/">View</a>'
+            "action": f'<a class="btn btn-sm btn-outline-primary" href="/compound/{c["id"]}/">View</a>'
         })
 
     return JsonResponse({
         "draw": draw,
         "recordsTotal": records_total,
-        "recordsFiltered": records_total,
+        "recordsFiltered": records_filtered,
         "data": data
     })
 
