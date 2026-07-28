@@ -188,10 +188,9 @@
 <br><br>
 
 <!-- ================= Similar Samples ================= -->
-{% if similar_samples %}
 <table class="table w-100 table-bordered table-hover mb-4">
   <thead class="table-info">
-    <tr><th class="text-center fs-5 py-2" colspan="8">Plants Containing Similar Compounds</th></tr>
+    <tr><th class="text-center fs-5 py-2" colspan="7">Plants Containing Similar Compounds</th></tr>
   </thead>
   <tr class="table-secondary fw-bold">
     <th>#</th><th>Chinese Name</th><th>Latin Name</th>
@@ -210,6 +209,12 @@
       <td>
         <a href="{% url 'similar_compare' compound_id=compound.id spectrum_idx=s.spectrum_idx %}?score={{ s.score }}"
            class="btn btn-sm btn-outline-primary">View</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr>
+      <td colspan="7" class="text-center text-muted">
+        No plants containing similar compounds found
       </td>
     </tr>
     {% endfor %}
@@ -254,7 +259,6 @@
     {% endif %}
   </ul>
 </div>
-{% endif %}
 
 <br><br>
 
