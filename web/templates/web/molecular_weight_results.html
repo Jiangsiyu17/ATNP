@@ -81,7 +81,12 @@ $(function () {
             { data: "index", orderable: false },
             { data: "standard" },
             { data: "database" },
-            { data: "smiles" },
+            {
+                data: "smiles",
+                render: data => data
+                    ? `<span class="smiles-text">${data}</span>`
+                    : ""
+            },
             { data: "mw" }, 
             { data: "antitumor" },
             { data: "ionmode" },

@@ -45,7 +45,7 @@
                     {% if db in "nist nist20" %}NIST{% elif db == "in-house" %}ATNP{% else %}{{ db|upper }}{% endif %}
                 {% endwith %}
             </td>
-            <td style="font-family: monospace; font-size: 0.85em; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            <td class="smiles-text" style="max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                 {{ r.smiles|default:"-" }}
             </td>
             <td>{{ r.antitumor|yesno:"True,False" }}</td>

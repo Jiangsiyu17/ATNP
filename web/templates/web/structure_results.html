@@ -32,7 +32,7 @@
                 <td>{{ forloop.counter }}</td>
                 <td>{{ r.similarity }}</td>
                 <td>{{ r.compound_name }}</td>
-                <td style="font-family: monospace; font-size: 0.85em;">{{ r.smiles|default:"-" }}</td>
+                <td class="smiles-text">{{ r.smiles|default:"-" }}</td>
                 <td>{{ r.database|default:"-" }}</td>
                 <!-- <td>
                     {{ r.antitumor }} 新增显示
