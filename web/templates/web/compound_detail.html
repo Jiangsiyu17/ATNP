@@ -182,6 +182,20 @@
         <a class="page-link" href="?plant_page={{ plant_sources.next_page_number }}">Next ›</a>
       </li>
     {% endif %}
+    {% if plant_sources.paginator.num_pages > 3 %}
+      <li class="page-item">
+        <form class="page-jump-form" method="get">
+          {% if similar_samples %}<input type="hidden" name="sample_page" value="{{ similar_samples.number }}">{% endif %}
+          <input type="hidden" name="pubmed_page" value="{{ pubmed_page.number }}">
+          <label class="mb-0" for="plant-page-jump">Page</label>
+          <input id="plant-page-jump" class="form-control form-control-sm page-jump-input"
+                 type="number" name="plant_page" min="1"
+                 max="{{ plant_sources.paginator.num_pages }}" value="{{ plant_sources.number }}">
+          <span>of {{ plant_sources.paginator.num_pages }}</span>
+          <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
+        </form>
+      </li>
+    {% endif %}
   </ul>
 </div>
 
@@ -255,6 +269,20 @@
            href="?sample_page={{ similar_samples.next_page_number }}&plant_page={{ plant_sources.number }}">
            Next ›
         </a>
+      </li>
+    {% endif %}
+    {% if similar_samples.paginator.num_pages > 3 %}
+      <li class="page-item">
+        <form class="page-jump-form" method="get">
+          <input type="hidden" name="plant_page" value="{{ plant_sources.number }}">
+          <input type="hidden" name="pubmed_page" value="{{ pubmed_page.number }}">
+          <label class="mb-0" for="sample-page-jump">Page</label>
+          <input id="sample-page-jump" class="form-control form-control-sm page-jump-input"
+                 type="number" name="sample_page" min="1"
+                 max="{{ similar_samples.paginator.num_pages }}" value="{{ similar_samples.number }}">
+          <span>of {{ similar_samples.paginator.num_pages }}</span>
+          <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
+        </form>
       </li>
     {% endif %}
   </ul>
@@ -356,6 +384,20 @@
           href="?pubmed_page={{ pubmed_page.next_page_number }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
           Next ›
         </a>
+      </li>
+    {% endif %}
+    {% if pubmed_page.paginator.num_pages > 3 %}
+      <li class="page-item">
+        <form class="page-jump-form" method="get">
+          <input type="hidden" name="plant_page" value="{{ plant_sources.number }}">
+          {% if similar_samples %}<input type="hidden" name="sample_page" value="{{ similar_samples.number }}">{% endif %}
+          <label class="mb-0" for="pubmed-page-jump">Page</label>
+          <input id="pubmed-page-jump" class="form-control form-control-sm page-jump-input"
+                 type="number" name="pubmed_page" min="1"
+                 max="{{ pubmed_page.paginator.num_pages }}" value="{{ pubmed_page.number }}">
+          <span>of {{ pubmed_page.paginator.num_pages }}</span>
+          <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
+        </form>
       </li>
     {% endif %}
 

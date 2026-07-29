@@ -42,6 +42,7 @@ class CompoundNameSearchTests(TestCase):
             response,
             reverse("compound_detail", args=[self.aspirin.pk]),
         )
+        self.assertNotContains(response, 'id="search-page-jump"')
 
     def test_duplicate_spectra_are_grouped_by_compound_name(self):
         response = self.client.get(reverse("search"), {"q": "aspirin"})
@@ -53,6 +54,22 @@ class CompoundNameSearchTests(TestCase):
 
         self.assertContains(response, ">NIST<")
         self.assertNotContains(response, "NIST 20")
+
+    def test_page_jump_is_only_displayed_after_three_pages(self):
+        CompoundLibrary.objects.bulk_create([
+            CompoundLibrary(
+                standard=f"Aspirin result {index}",
+                title=f"Aspirin result {index}",
+                spectrum_type="standard",
+            )
+            for index in range(59)
+        ])
+
+        response = self.client.get(reverse("search"), {"q": "aspirin"})
+
+        self.assertEqual(response.context["results"].paginator.num_pages, 4)
+        self.assertContains(response, 'id="search-page-jump"')
+        self.assertContains(response, 'max="4"')
 
     def test_smiles_is_not_treated_as_a_name_search(self):
         response = self.client.get(reverse("search"), {"q": "CC(=O)OC1"})

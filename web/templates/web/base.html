@@ -99,6 +99,18 @@
             margin-right: 15px;
         }
 
+        .page-jump-form {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-left: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .page-jump-input {
+            width: 70px;
+        }
+
         .btn-outline-success {
             border-color: rgb(64, 158, 255);
             color: rgb(64, 158, 255);
@@ -177,6 +189,58 @@
 
 <!-- 4️⃣ DataTables Bootstrap 5 -->
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+
+<!-- DataTables page jump: displayed only when there are more than 3 pages -->
+<script>
+(function () {
+    function addDataTablePageJump(settings) {
+        const api = new $.fn.dataTable.Api(settings);
+        const info = api.page.info();
+        const wrapper = $(api.table().container());
+        const pagination = wrapper.find('.dataTables_paginate');
+
+        pagination.find('.datatable-page-jump').remove();
+
+        if (info.pages <= 3) {
+            return;
+        }
+
+        const jump = $(`
+            <form class="page-jump-form datatable-page-jump" action="#">
+                <label class="mb-0">Page</label>
+                <input class="form-control form-control-sm page-jump-input"
+                       type="number"
+                       min="1"
+                       max="${info.pages}"
+                       value="${info.page + 1}"
+                       aria-label="Page number">
+                <span>of ${info.pages}</span>
+                <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
+            </form>
+        `);
+
+        jump.on('submit', function (event) {
+            event.preventDefault();
+            const input = jump.find('input');
+            const requestedPage = Number.parseInt(input.val(), 10);
+
+            if (Number.isNaN(requestedPage)) {
+                input.trigger('focus');
+                return;
+            }
+
+            const targetPage = Math.min(Math.max(requestedPage, 1), info.pages);
+            api.page(targetPage - 1).draw('page');
+        });
+
+        pagination.append(jump);
+    }
+
+    $(document).on('draw.dt', function (event, settings) {
+        addDataTablePageJump(settings);
+    });
+})();
+</script>
 
 {% block extra_js %}{% endblock %}
 

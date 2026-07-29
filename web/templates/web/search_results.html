@@ -66,6 +66,24 @@
                href="?q={{ query|urlencode }}&amp;page={{ results.next_page_number }}">Next</a>
         </li>
         {% endif %}
+
+        {% if results.paginator.num_pages > 3 %}
+        <li class="page-item">
+            <form class="page-jump-form" method="get">
+                <input type="hidden" name="q" value="{{ query }}">
+                <label class="mb-0" for="search-page-jump">Page</label>
+                <input id="search-page-jump"
+                       class="form-control form-control-sm page-jump-input"
+                       type="number"
+                       name="page"
+                       min="1"
+                       max="{{ results.paginator.num_pages }}"
+                       value="{{ results.number }}">
+                <span>of {{ results.paginator.num_pages }}</span>
+                <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
+            </form>
+        </li>
+        {% endif %}
     </ul>
 </nav>
 {% endif %}
