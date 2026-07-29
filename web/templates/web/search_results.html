@@ -1,0 +1,75 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Search results{% endblock %}
+
+{% block content %}
+
+<h3 class="mt-4">Compound Name Search Results</h3>
+<hr>
+
+<p class="text-muted">
+    Compounds with names similar to “{{ query }}”
+    ({{ results.paginator.count }} result{{ results.paginator.count|pluralize }})
+</p>
+
+<div class="table-responsive mt-3">
+    <table class="table w-100 table-striped table-bordered table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th style="min-width: 60px;">#</th>
+                <th style="min-width: 220px;">Compound Name</th>
+                <th style="min-width: 220px;">SMILES</th>
+                <th style="min-width: 160px;">Database</th>
+                <th style="min-width: 110px;">Ion Mode</th>
+                <th style="min-width: 90px;">Detail</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for compound in results %}
+            <tr>
+                <td>{{ results.start_index|add:forloop.counter0 }}</td>
+                <td>{{ compound.standard|default:"(unknown)" }}</td>
+                <td class="smiles-text">{{ compound.smiles|default:"-" }}</td>
+                <td>{{ compound.database|default:"-" }}</td>
+                <td>{{ compound.ionmode|default:"-" }}</td>
+                <td class="text-center">
+                    <a href="{% url 'compound_detail' compound.first_id %}"
+                       class="btn btn-sm btn-outline-primary">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if results.has_other_pages %}
+<nav aria-label="Compound search result pages">
+    <ul class="pagination justify-content-center">
+        {% if results.has_previous %}
+        <li class="page-item">
+            <a class="page-link"
+               href="?q={{ query|urlencode }}&amp;page={{ results.previous_page_number }}">Previous</a>
+        </li>
+        {% endif %}
+
+        <li class="page-item disabled">
+            <span class="page-link">
+                Page {{ results.number }} of {{ results.paginator.num_pages }}
+            </span>
+        </li>
+
+        {% if results.has_next %}
+        <li class="page-item">
+            <a class="page-link"
+               href="?q={{ query|urlencode }}&amp;page={{ results.next_page_number }}">Next</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<hr>
+
+{% endblock %}

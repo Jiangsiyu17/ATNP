@@ -235,23 +235,44 @@ def search(request):
         )
 
     # ======================================================
-    # 1️⃣ 搜化合物
+    # 1️⃣ 搜化合物名称，并先展示相似命中列表
     # ======================================================
-    qs = CompoundLibrary.objects.filter(
+    compound_qs = CompoundLibrary.objects.filter(
         spectrum_type__iexact="standard"
     ).filter(
         Q(standard__icontains=query) |
-        Q(title__icontains=query) |
-        Q(smiles__icontains=query)
+        Q(title__icontains=query)
     )
 
-    if qs.exists():
-        compound = qs.first()
-        return redirect(
-            reverse(
-                "compound_detail",
-                args=[compound.pk]
+    if compound_qs.exists():
+        # 同名化合物可能因数据库来源或离子模式不同而有多条谱图记录。
+        # 搜索结果按名称合并，并保留一条记录作为详情页入口。
+        grouped_results = (
+            compound_qs
+            .values("standard")
+            .annotate(
+                first_id=Min("id"),
+                smiles=Min("smiles"),
+                database=Min("database"),
+                ionmode=Min("ionmode"),
             )
+            .order_by(Lower("standard"))
+        )
+        result_page = Paginator(grouped_results, 20).get_page(
+            request.GET.get("page")
+        )
+        for result in result_page.object_list:
+            database_name = (result.get("database") or "").strip()
+            if database_name.lower() in {"nist20", "nist 20"}:
+                result["database"] = "NIST"
+
+        return render(
+            request,
+            "web/search_results.html",
+            {
+                "query": query,
+                "results": result_page,
+            },
         )
 
     # ======================================================
