@@ -103,9 +103,14 @@ $(function () {
             {
                 data: "smiles",
                 width: "320px",
-                render: data => data
-                    ? `<span class="smiles-text" title="${data}">${data}</span>`
-                    : ""
+                className: "smiles-text",
+                render: function (data) {
+                    if (!data) {
+                        return "";
+                    }
+                    const escaped = $('<div>').text(data).html();
+                    return `<span title="${escaped}">${escaped}</span>`;
+                }
             },
             {
                 data: "antitumor",

@@ -130,7 +130,7 @@
 <br>
 
 <!-- ================= Plant Sources ================= -->
-<table class="table w-100 table-bordered table-hover mb-4">
+<table id="plant-sources" class="table w-100 table-bordered table-hover mb-4">
   <thead class="table-info">
     <tr><th class="text-center fs-5 py-2" colspan="7">Plant Sources</th></tr>
   </thead>
@@ -159,50 +159,12 @@
 </table>
 
 <!-- Plant pagination -->
-<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-  <div class="page_info">
-    Displaying <b>{{ plant_sources.start_index }} - {{ plant_sources.end_index }}</b>
-    of <b>{{ plant_sources.paginator.count }}</b>
-  </div>
-  <ul class="pagination pagination-sm mb-0">
-    {% if plant_sources.has_previous %}
-      <li class="page-item">
-        <a class="page-link" href="?plant_page={{ plant_sources.previous_page_number }}">‹ Prev</a>
-      </li>
-    {% endif %}
-    {% for num in plant_sources.paginator.page_range %}
-      {% if num >= plant_sources.number|add:"-2" and num <= plant_sources.number|add:"2" %}
-      <li class="page-item {% if num == plant_sources.number %}active{% endif %}">
-        <a class="page-link" href="?plant_page={{ num }}">{{ num }}</a>
-      </li>
-      {% endif %}
-    {% endfor %}
-    {% if plant_sources.has_next %}
-      <li class="page-item">
-        <a class="page-link" href="?plant_page={{ plant_sources.next_page_number }}">Next ›</a>
-      </li>
-    {% endif %}
-    {% if plant_sources.paginator.num_pages > 3 %}
-      <li class="page-item">
-        <form class="page-jump-form" method="get">
-          {% if similar_samples %}<input type="hidden" name="sample_page" value="{{ similar_samples.number }}">{% endif %}
-          <input type="hidden" name="pubmed_page" value="{{ pubmed_page.number }}">
-          <label class="mb-0" for="plant-page-jump">Page</label>
-          <input id="plant-page-jump" class="form-control form-control-sm page-jump-input"
-                 type="number" name="plant_page" min="1"
-                 max="{{ plant_sources.paginator.num_pages }}" value="{{ plant_sources.number }}">
-          <span>of {{ plant_sources.paginator.num_pages }}</span>
-          <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
-        </form>
-      </li>
-    {% endif %}
-  </ul>
-</div>
+{% include "web/includes/pagination_controls.html" with page_obj=plant_sources page_param="plant_page" anchor_id="plant-sources" show_info=True %}
 
 <br><br>
 
 <!-- ================= Similar Samples ================= -->
-<table class="table w-100 table-bordered table-hover mb-4">
+<table id="similar-compounds" class="table w-100 table-bordered table-hover mb-4">
   <thead class="table-info">
     <tr><th class="text-center fs-5 py-2" colspan="7">Plants Containing Similar Compounds</th></tr>
   </thead>
@@ -236,63 +198,15 @@
 </table>
 
 <!-- Similar pagination -->
-<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-  <div class="page_info">
-    Displaying <b>{{ similar_samples.start_index }} - {{ similar_samples.end_index }}</b>
-    of <b>{{ similar_samples.paginator.count }}</b>
-  </div>
-
-  <ul class="pagination pagination-sm mb-0">
-    {% if similar_samples.has_previous %}
-      <li class="page-item">
-        <a class="page-link"
-           href="?sample_page={{ similar_samples.previous_page_number }}&plant_page={{ plant_sources.number }}">
-           ‹ Prev
-        </a>
-      </li>
-    {% endif %}
-
-    {% for num in similar_samples.paginator.page_range %}
-      {% if num >= similar_samples.number|add:"-2" and num <= similar_samples.number|add:"2" %}
-      <li class="page-item {% if num == similar_samples.number %}active{% endif %}">
-        <a class="page-link"
-           href="?sample_page={{ num }}&plant_page={{ plant_sources.number }}">
-           {{ num }}
-        </a>
-      </li>
-      {% endif %}
-    {% endfor %}
-
-    {% if similar_samples.has_next %}
-      <li class="page-item">
-        <a class="page-link"
-           href="?sample_page={{ similar_samples.next_page_number }}&plant_page={{ plant_sources.number }}">
-           Next ›
-        </a>
-      </li>
-    {% endif %}
-    {% if similar_samples.paginator.num_pages > 3 %}
-      <li class="page-item">
-        <form class="page-jump-form" method="get">
-          <input type="hidden" name="plant_page" value="{{ plant_sources.number }}">
-          <input type="hidden" name="pubmed_page" value="{{ pubmed_page.number }}">
-          <label class="mb-0" for="sample-page-jump">Page</label>
-          <input id="sample-page-jump" class="form-control form-control-sm page-jump-input"
-                 type="number" name="sample_page" min="1"
-                 max="{{ similar_samples.paginator.num_pages }}" value="{{ similar_samples.number }}">
-          <span>of {{ similar_samples.paginator.num_pages }}</span>
-          <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
-        </form>
-      </li>
-    {% endif %}
-  </ul>
-</div>
+{% if similar_samples %}
+{% include "web/includes/pagination_controls.html" with page_obj=similar_samples page_param="sample_page" anchor_id="similar-compounds" show_info=True %}
+{% endif %}
 
 <br><br>
 
 
 <!-- ================= Publications ================= -->
-<table class="table w-100 table-bordered table-hover mb-4 pubmed-table">
+<table id="publications" class="table w-100 table-bordered table-hover mb-4 pubmed-table">
 
   <!-- ✅ 列宽控制 -->
   <colgroup>
@@ -349,60 +263,7 @@
   </tbody>
 </table>
 
-<div class="pagination-holder d-flex justify-content-between align-items-center mt-3">
-
-  <div class="page_info">
-    Displaying <b>{{ pubmed_page.start_index }} - {{ pubmed_page.end_index }}</b>
-    of <b>{{ pubmed_page.paginator.count }}</b>
-  </div>
-
-  <ul class="pagination pagination-sm mb-0">
-
-    {% if pubmed_page.has_previous %}
-      <li class="page-item">
-        <a class="page-link"
-          href="?pubmed_page={{ pubmed_page.previous_page_number }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
-          ‹ Prev
-        </a>
-      </li>
-    {% endif %}
-
-    {% for num in pubmed_page.paginator.page_range %}
-      {% if num >= pubmed_page.number|add:"-2" and num <= pubmed_page.number|add:"2" %}
-      <li class="page-item {% if num == pubmed_page.number %}active{% endif %}">
-        <a class="page-link"
-          href="?pubmed_page={{ num }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
-          {{ num }}
-        </a>
-      </li>
-      {% endif %}
-    {% endfor %}
-
-    {% if pubmed_page.has_next %}
-      <li class="page-item">
-        <a class="page-link"
-          href="?pubmed_page={{ pubmed_page.next_page_number }}&plant_page={{ plant_sources.number }}{% if similar_samples %}&sample_page={{ similar_samples.number }}{% endif %}">
-          Next ›
-        </a>
-      </li>
-    {% endif %}
-    {% if pubmed_page.paginator.num_pages > 3 %}
-      <li class="page-item">
-        <form class="page-jump-form" method="get">
-          <input type="hidden" name="plant_page" value="{{ plant_sources.number }}">
-          {% if similar_samples %}<input type="hidden" name="sample_page" value="{{ similar_samples.number }}">{% endif %}
-          <label class="mb-0" for="pubmed-page-jump">Page</label>
-          <input id="pubmed-page-jump" class="form-control form-control-sm page-jump-input"
-                 type="number" name="pubmed_page" min="1"
-                 max="{{ pubmed_page.paginator.num_pages }}" value="{{ pubmed_page.number }}">
-          <span>of {{ pubmed_page.paginator.num_pages }}</span>
-          <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
-        </form>
-      </li>
-    {% endif %}
-
-  </ul>
-</div>
+{% include "web/includes/pagination_controls.html" with page_obj=pubmed_page page_param="pubmed_page" anchor_id="publications" show_info=True %}
 
 
 <hr>

@@ -14,7 +14,7 @@
 </p>
 
 <div class="table-responsive mt-3">
-    <table class="table w-100 table-striped table-bordered table-hover align-middle">
+    <table id="search" class="table w-100 table-striped table-bordered table-hover align-middle">
         <thead class="table-light">
             <tr>
                 <th style="min-width: 60px;">#</th>
@@ -46,45 +46,7 @@
 
 {% if results.has_other_pages %}
 <nav aria-label="Compound search result pages">
-    <ul class="pagination justify-content-center">
-        {% if results.has_previous %}
-        <li class="page-item">
-            <a class="page-link"
-               href="?q={{ query|urlencode }}&amp;page={{ results.previous_page_number }}">Previous</a>
-        </li>
-        {% endif %}
-
-        <li class="page-item disabled">
-            <span class="page-link">
-                Page {{ results.number }} of {{ results.paginator.num_pages }}
-            </span>
-        </li>
-
-        {% if results.has_next %}
-        <li class="page-item">
-            <a class="page-link"
-               href="?q={{ query|urlencode }}&amp;page={{ results.next_page_number }}">Next</a>
-        </li>
-        {% endif %}
-
-        {% if results.paginator.num_pages > 3 %}
-        <li class="page-item">
-            <form class="page-jump-form" method="get">
-                <input type="hidden" name="q" value="{{ query }}">
-                <label class="mb-0" for="search-page-jump">Page</label>
-                <input id="search-page-jump"
-                       class="form-control form-control-sm page-jump-input"
-                       type="number"
-                       name="page"
-                       min="1"
-                       max="{{ results.paginator.num_pages }}"
-                       value="{{ results.number }}">
-                <span>of {{ results.paginator.num_pages }}</span>
-                <button class="btn btn-sm btn-outline-primary" type="submit">Go</button>
-            </form>
-        </li>
-        {% endif %}
-    </ul>
+    {% include "web/includes/pagination_controls.html" with page_obj=results page_param="page" anchor_id="search" show_info=False %}
 </nav>
 {% endif %}
 

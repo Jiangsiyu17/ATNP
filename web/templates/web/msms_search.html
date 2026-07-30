@@ -24,13 +24,32 @@
     <h3>MS/MS Query</h3>
     <hr>
     <div class="p-4" style="background-color: #f5f5f5; border-radius: 8px;">
-        <form method="get" action="{% url 'msms_result' %}">
+        <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <div>
+                <strong>Need an example?</strong>
+                Load a positive-mode MS/MS spectrum for Norharmane and run a test search.
+            </div>
+            <button id="load-msms-example"
+                    type="button"
+                    class="btn btn-sm btn-outline-primary text-nowrap">
+                Load Example
+            </button>
+        </div>
+
+        <form id="msms-search-form" method="get" action="{% url 'msms_result' %}">
                 <div class="row">
 
                     <!-- 左侧输入框 -->
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">MS/MS spectrum (m/z & Intensity):</label>
-                        <textarea name="msms_spectrum" class="form-control" rows="12"></textarea>
+                        <label class="form-label" for="msms-spectrum">
+                            MS/MS spectrum (m/z &amp; Intensity):
+                        </label>
+                        <textarea id="msms-spectrum"
+                                  name="msms_spectrum"
+                                  class="form-control"
+                                  rows="12"
+                                  placeholder="Enter one peak per line, for example:&#10;57.0704 869.24&#10;67.0543 388.69"></textarea>
+                        <div class="form-text">Enter one “m/z intensity” pair per line. At least 3 valid peaks are required.</div>
                     </div>
 
                     <!-- 右侧整体垂直居中 -->
@@ -40,7 +59,7 @@
                         <div class="row mb-3 align-items-center">
                             <label class="col-5 col-form-label text-end">Parent Ion m/z:</label>
                             <div class="col-7">
-                                <input type="text" name="parent_mz" class="form-control" placeholder="e.g. 239.2006">
+                                <input id="parent-mz" type="text" name="parent_mz" class="form-control" placeholder="e.g. 239.2006">
                             </div>
                         </div>
 
@@ -48,10 +67,10 @@
                         <div class="row mb-3 align-items-center">
                             <label class="col-5 col-form-label text-end">Parent Ion m/z Tol ±:</label>
                             <div class="col-5">
-                                <input type="text" name="parent_tol" class="form-control" placeholder="e.g. 0.1">
+                                <input id="parent-tol" type="text" name="parent_tol" class="form-control" placeholder="e.g. 0.1">
                             </div>
                             <div class="col-2">
-                                <select name="parent_tol_unit" class="form-select">
+                                <select id="parent-tol-unit" name="parent_tol_unit" class="form-select">
                                     <option value="Da">Da</option>
                                     <option value="ppm">ppm</option>
                                 </select>
@@ -62,10 +81,10 @@
                         <div class="row mb-3 align-items-center">
                             <label class="col-5 col-form-label text-end">m/z Tol ±:</label>
                             <div class="col-5">
-                                <input type="text" name="mz_tol" class="form-control" placeholder="e.g. 0.1">
+                                <input id="mz-tol" type="text" name="mz_tol" class="form-control" placeholder="e.g. 0.1">
                             </div>
                             <div class="col-2">
-                                <select name="mz_tol_unit" class="form-select">
+                                <select id="mz-tol-unit" name="mz_tol_unit" class="form-select">
                                     <option value="Da">Da</option>
                                     <option value="ppm">ppm</option>
                                 </select>
@@ -76,7 +95,7 @@
                         <div class="row mb-3 align-items-center">
                             <label class="col-5 col-form-label text-end">Ion Mode:</label>
                             <div class="col-7">
-                                <select name="ion_mode" class="form-select">
+                                <select id="ion-mode" name="ion_mode" class="form-select">
                                     <option value="positive">Positive</option>
                                     <option value="negative">Negative</option>
                                 </select>
@@ -91,4 +110,35 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('load-msms-example').addEventListener('click', function () {
+    const exampleSpectrum = `55.018196 127.000000
+57.070404 869.242859
+67.054253 388.694702
+69.069000 93.240387
+71.052315 253.680557
+78.996498 252.976349
+81.068687 182.333328
+83.021278 113.011360
+93.068481 367.003387
+105.069099 239.941177
+109.102074 552.969849
+111.103226 45.149391
+123.003639 38.025002
+127.112740 833.000000
+127.116722 343.004639`;
+
+    document.getElementById('msms-spectrum').value = exampleSpectrum;
+    document.getElementById('parent-mz').value = '169.1226';
+    document.getElementById('parent-tol').value = '0.1';
+    document.getElementById('parent-tol-unit').value = 'Da';
+    document.getElementById('mz-tol').value = '0.1';
+    document.getElementById('mz-tol-unit').value = 'Da';
+    document.getElementById('ion-mode').value = 'positive';
+    document.getElementById('msms-spectrum').focus();
+});
+</script>
 {% endblock %}

@@ -58,10 +58,14 @@
             vertical-align: middle;
         }
 
-        /* Keep SMILES text consistent with the Compound List table. */
-        .smiles-text {
-            font-family: inherit;
-            font-size: 14px;
+        /* Use one explicit font for every SMILES cell and nested element. */
+        .smiles-text,
+        .smiles-text * {
+            font-family: Arial, Helvetica, sans-serif !important;
+            font-size: 14px !important;
+            font-weight: 400 !important;
+            font-style: normal !important;
+            font-variant-ligatures: none;
         }
 
         .container {
@@ -93,6 +97,46 @@
             font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
             font-size: 14px;
             margin-top: 10px;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .pagination-holder .pagination,
+        .dataTables_paginate {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+
+        .pagination-holder .pagination {
+            justify-content: flex-end;
+            margin-left: auto;
+        }
+
+        @media (min-width: 768px) {
+            .dataTables_wrapper > .row:last-child {
+                align-items: center;
+                flex-wrap: nowrap;
+            }
+
+            .dataTables_wrapper > .row:last-child > div:first-child {
+                flex: 0 0 auto;
+                width: auto;
+            }
+
+            .dataTables_wrapper > .row:last-child > div:last-child {
+                flex: 1 1 auto;
+                width: auto;
+                min-width: 0;
+            }
+
+            .dataTables_wrapper .dataTables_paginate {
+                justify-content: flex-end;
+                flex-wrap: nowrap;
+                margin-top: 0 !important;
+                white-space: nowrap;
+            }
         }
 
         .page_info {
@@ -109,6 +153,36 @@
 
         .page-jump-input {
             width: 70px;
+        }
+
+        @media (max-width: 576px) {
+            .pagination-holder {
+                align-items: flex-start !important;
+            }
+
+            .pagination-holder .page_info,
+            .pagination-holder .pagination {
+                width: 100%;
+            }
+
+            .pagination-holder .pagination {
+                justify-content: flex-end;
+            }
+
+            .page-jump-form {
+                margin-left: 0;
+                margin-top: 0.35rem;
+            }
+
+            .page-jump-input {
+                width: 62px;
+            }
+
+            .dataTables_paginate {
+                float: none !important;
+                justify-content: flex-start !important;
+                margin-top: 0.5rem;
+            }
         }
 
         .btn-outline-success {
@@ -193,6 +267,9 @@
 <!-- DataTables page jump: displayed only when there are more than 3 pages -->
 <script>
 (function () {
+    // Keep enough room for the page-jump control on the same line.
+    $.fn.dataTable.ext.pager.numbers_length = 5;
+
     function addDataTablePageJump(settings) {
         const api = new $.fn.dataTable.Api(settings);
         const info = api.page.info();
