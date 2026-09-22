@@ -1,0 +1,107 @@
+{% extends "web/base.html" %}
+{% block title %}Knowledge Search | ATNP{% endblock %}
+{% block extra_head %}
+<style>
+  .knowledge-page { max-width: 1250px; margin: 2.5rem auto 5rem; }
+  .knowledge-form { box-shadow: 0 .25rem 1rem rgba(0,0,0,.07); }
+  .example-query { cursor: pointer; border-color: #b9ddfb; color: #1769aa; }
+  .example-query:hover { background: #edf6ff; color: #12527f; }
+  .type-label { font-size: .72rem; color: #6c757d; display: block; }
+  .relation-value { color: #1769aa; font-weight: 600; }
+  .reference-title { max-width: 340px; }
+  .knowledge-table td { vertical-align: middle; }
+</style>
+{% endblock %}
+{% block content %}
+<main class="knowledge-page">
+  <header class="text-center mb-4">
+    <h1 class="h2 mb-2">Knowledge Base Search</h1>
+    <p class="text-muted">Query the ATNP knowledge graph</p>
+  </header>
+
+  <form class="card knowledge-form mb-4" method="get" action="{% url 'knowledge_search' %}">
+    <div class="card-body"><div class="row g-3 align-items-end">
+      <div class="col-lg-4">
+        <label class="form-label" for="knowledge-head">Head entity</label>
+        <input id="knowledge-head" class="form-control" name="head" value="{{ head }}"
+               maxlength="120" placeholder="e.g., Paclitaxel">
+      </div>
+      <div class="col-lg-3">
+        <label class="form-label" for="knowledge-relation">Relation</label>
+        <select id="knowledge-relation" class="form-select" name="relation">
+          <option value="">All relations</option>
+          {% for item in relations %}
+            <option value="{{ item }}" {% if relation == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-lg-4">
+        <label class="form-label" for="knowledge-tail">Tail entity</label>
+        <input id="knowledge-tail" class="form-control" name="tail" value="{{ tail }}"
+               maxlength="120" placeholder="e.g., apoptosis">
+      </div>
+      <div class="col-lg-1 d-grid">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
+      </div>
+    </div></div>
+  </form>
+
+  <section class="mb-4">
+    <span class="text-muted me-2">Try examples:</span>
+    <a class="btn btn-sm btn-outline-primary example-query me-1 mb-1" href="?head=Paclitaxel">Paclitaxel as Head</a>
+    <a class="btn btn-sm btn-outline-primary example-query me-1 mb-1" href="?relation=inhibits">Relation: inhibits</a>
+    <a class="btn btn-sm btn-outline-primary example-query me-1 mb-1" href="?tail=apoptosis">Apoptosis as Tail</a>
+    <a class="btn btn-sm btn-outline-primary example-query mb-1" href="?head=Paclitaxel&relation=inhibits">Paclitaxel inhibits...</a>
+  </section>
+
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% elif searched %}
+    {% if triples %}
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Search Results</h2>
+        <span class="text-muted">{{ total }} relationship{{ total|pluralize }}</span>
+      </div>
+      <div class="table-responsive"><table class="table table-bordered table-hover knowledge-table">
+        <thead class="table-light"><tr>
+          <th>Head</th><th>Relation</th><th>Tail</th><th>Reference</th>
+        </tr></thead>
+        <tbody>
+        {% for triple in triples %}
+          <tr>
+            <td>{{ triple.head_name }}<span class="type-label">{{ triple.head_type }}</span></td>
+            <td><span class="relation-value">{{ triple.relation }}</span></td>
+            <td>{{ triple.tail_name }}<span class="type-label">{{ triple.tail_type }}</span></td>
+            <td class="reference-title">
+              {% if triple.reference %}
+                <div class="small mb-1">{{ triple.reference.title|default:"Source publication" }}</div>
+                {% if triple.reference.doi %}<a class="me-2" href="https://doi.org/{{ triple.reference.doi|urlencode }}" target="_blank" rel="noopener">DOI</a>{% endif %}
+                {% if triple.reference.pmid %}<a href="https://pubmed.ncbi.nlm.nih.gov/{{ triple.reference.pmid|urlencode }}/" target="_blank" rel="noopener">PubMed</a>{% endif %}
+              {% else %}<span class="text-muted">No reference available</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+
+      {% if total_pages > 1 %}
+        <nav aria-label="Knowledge result pages"><ul class="pagination justify-content-center">
+          <li class="page-item {% if page <= 1 %}disabled{% endif %}"><a class="page-link" href="?head={{ head|urlencode }}&relation={{ relation|urlencode }}&tail={{ tail|urlencode }}&page={{ page|add:'-1' }}">Previous</a></li>
+          <li class="page-item disabled"><span class="page-link">Page {{ page }} of {{ total_pages }}</span></li>
+          <li class="page-item {% if page >= total_pages %}disabled{% endif %}"><a class="page-link" href="?head={{ head|urlencode }}&relation={{ relation|urlencode }}&tail={{ tail|urlencode }}&page={{ page|add:'1' }}">Next</a></li>
+        </ul></nav>
+      {% endif %}
+    {% else %}
+      <div class="text-center border rounded bg-light p-5">
+        <i class="bi bi-diagram-3 fs-1 text-muted"></i>
+        <h2 class="h5 mt-3">No relationships found</h2>
+        <p class="text-muted mb-0">Try removing one condition or using a partial entity name.</p>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="alert alert-light border text-center text-muted">
+      Enter any one of Head, Relation, or Tail. You may also combine multiple fields.
+    </div>
+  {% endif %}
+</main>
+{% endblock %}

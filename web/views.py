@@ -320,7 +320,8 @@ from web.utils import sascorer
 from django.core.paginator import Paginator
 from web.utils.similar_cache import get_similar_samples
 
-from web.utils.pubmed_utils import get_pubmed_papers
+from web.services.knowledge import get_compound_evidence
+from web.services.literature import LiteratureDatabaseError
 
 
 def parse_precursor_mz(precursor_mz, pepmass):
@@ -464,28 +465,25 @@ def compound_detail(request, pk):
     # ✅ 如果 similar_samples 不为空才分页，否则直接 None
     sample_page = Paginator(similar_samples, 10).get_page(request.GET.get("sample_page")) if similar_samples else None
 
-    # ===== 表格 C：PubMed 文献 =====
-    pubmed_raw = get_pubmed_papers(compound.standard)
+    # ===== 表格 C：知识库关联文献 =====
+    publication_error = ""
+    try:
+        publications = get_compound_evidence(compound.standard)
+    except LiteratureDatabaseError as exc:
+        publications = []
+        publication_error = str(exc)
 
-    # ✅ 可选：按年份排序（推荐）
-    pubmed_raw = sorted(
-        pubmed_raw,
-        key=lambda x: x.get("year", 0),
-        reverse=True
-    )
-
-    pubmed_page = Paginator(pubmed_raw, 10).get_page(
+    publication_page = Paginator(publications, 10).get_page(
         request.GET.get("pubmed_page")
     )
-    print("PubMed数量:", len(pubmed_raw))
-
     return render(request, "web/compound_detail.html", {
         "compound": compound,
         "mol_img": mol_img,
         "rdkit": rdkit_props,
         "plant_sources": plant_page,      # 已分页
         "similar_samples": sample_page,   # 已分页
-        "pubmed_page": pubmed_page,       # 已分页
+        "publication_page": publication_page,
+        "publication_error": publication_error,
     })
 
 

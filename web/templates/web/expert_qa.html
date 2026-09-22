@@ -1,0 +1,43 @@
+{% extends "web/base.html" %}
+{% load static %}
+
+{% block title %}Expert Q&amp;A · ATNP Database{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/expert-qa.css' %}">{% endblock %}
+
+{% block content %}
+<div class="qa-shell" id="qa-shell">
+  <aside class="qa-sidebar">
+    <div class="qa-side-title"><span class="qa-mark">A</span><div><strong>ATNP Expert</strong><small>Evidence-grounded Q&amp;A</small></div></div>
+    <button class="qa-new" id="qa-new" type="button">＋ 新建对话</button>
+    <div class="qa-history-head"><span>最近会话</span><button id="qa-clear" type="button">清空</button></div>
+    <div class="qa-history" id="qa-history"></div>
+    <p class="qa-empty" id="qa-empty">对话记录保存在当前浏览器中。</p>
+    <div class="qa-status"><i id="qa-status-dot"></i><span id="qa-status">正在检查服务</span></div>
+  </aside>
+  <main class="qa-main">
+    <div class="qa-mobile-head"><button id="qa-menu" type="button">☰</button><strong>Expert Q&amp;A</strong><span>天然产物证据问答</span></div>
+    <section class="qa-content">
+      <div id="qa-welcome" class="qa-welcome">
+        <div class="qa-hero-mark">A</div><h1>ATNP Expert Q&amp;A</h1>
+        <p>从天然产物知识图谱和科学文献中寻找答案</p>
+        <div class="qa-guide"><strong>你可以向 ATNP 询问</strong><span>药理活性、化合物发现、靶点与通路、疾病机制，以及植物来源。</span></div>
+        <div class="qa-suggestions">
+          <button data-question="姜黄素有哪些抗肿瘤作用机制？"><b>作用机制</b><span>姜黄素有哪些抗肿瘤作用机制？</span>→</button>
+          <button data-question="槲皮素可以调控哪些靶点和信号通路？"><b>靶点与通路</b><span>槲皮素可以调控哪些靶点和信号通路？</span>→</button>
+          <button data-question="哪些化合物有抗肺癌作用？"><b>化合物发现</b><span>哪些化合物有抗肺癌作用？</span>→</button>
+        </div>
+      </div>
+      <div id="qa-conversation" hidden>
+        <div id="qa-history-turns"></div>
+        <div class="qa-question"><small>你的问题</small><p id="qa-question"></p></div>
+        <div id="qa-progress" class="qa-progress" hidden><div class="qa-spinner"></div><span id="qa-progress-text">正在检索知识库…</span></div>
+        <article id="qa-answer" class="qa-answer" hidden><header><span class="qa-avatar">A</span><div><b>ATNP Expert</b><small id="qa-meta"></small></div><button id="qa-copy" type="button">复制</button></header><div id="qa-notice" class="qa-notice" hidden></div><div id="qa-answer-body" class="qa-answer-body"></div><details id="qa-references"><summary>参考文献 <span id="qa-reference-count">0</span> 篇</summary><div id="qa-reference-list"></div></details></article>
+        <div id="qa-error" class="qa-error" hidden><b>无法完成回答</b><p id="qa-error-text"></p><button id="qa-retry" type="button">重新尝试</button></div>
+      </div>
+    </section>
+    <footer class="qa-composer-wrap"><form id="qa-form" class="qa-composer"><textarea id="qa-input" rows="1" maxlength="2000" placeholder="询问天然产物的作用，或按疾病／功能寻找化合物…" required></textarea><div><label>模型 <select id="qa-model" disabled><option>读取中…</option></select></label><button id="qa-send" type="submit" aria-label="发送">↑</button></div></form><small id="qa-model-note">回答以 ATNP 文献证据为依据，请结合原始文献判断。</small></footer>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/expert-qa.js' %}"></script>{% endblock %}

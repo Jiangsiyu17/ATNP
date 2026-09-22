@@ -21,6 +21,7 @@ db.sqlite3
 
 *.sql
 *.txt
+!requirements-literature.txt
 *.pkl
 
 text_result/

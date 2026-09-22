@@ -31,6 +31,18 @@
     color: white !important;
   }
 
+  .publication-section-header {
+    background-color: rgb(64, 158, 255);
+    color: white;
+    border: 1px solid rgb(64, 158, 255);
+    border-radius: 0.25rem 0.25rem 0 0;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 1rem;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 500;
+  }
+
   .pubchem-link {
     font-size: 0.85em;
     color: #6c757d;
@@ -205,65 +217,46 @@
 <br><br>
 
 
-<!-- ================= Publications ================= -->
-<table id="publications" class="table w-100 table-bordered table-hover mb-4 pubmed-table">
+<!-- ================= Evidence and publications ================= -->
+<section id="publications" class="mb-4">
+  <h2 class="publication-section-header">Related Evidence and Publications</h2>
 
-  <!-- ✅ 列宽控制 -->
-  <colgroup>
-    <col style="width:50px;">   <!-- 序号 -->
-    <col>                       <!-- 标题 -->
-    <col style="width:120px;">   <!-- 按钮 -->
-  </colgroup>
+  {% if publication_error %}
+  <div class="alert alert-warning" role="alert">{{ publication_error }}</div>
+  {% endif %}
 
-  <thead class="table-info">
-    <tr>
-      <th class="text-center fs-5 py-2" colspan="3">
-        Related Publications
-      </th>
-    </tr>
-  </thead>
+  {% for p in publication_page.object_list %}
+  <article class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+        <span class="badge bg-primary">{{ p.head_name }}</span>
+        <strong>{{ p.relation }}</strong>
+        <span class="badge bg-info text-dark">{{ p.tail_name }}</span>
+      </div>
 
-  <tr class="table-secondary fw-bold">
-    <th>#</th>
-    <th>Title</th>
-    <th></th>
-  </tr>
+      <h3 class="h6 mb-2">Evidence</h3>
+      <blockquote class="border-start border-3 ps-3 mb-3" style="line-height:1.6;">
+        {{ p.evidence_sentence }}
+      </blockquote>
 
-  <tbody>
-    {% for p in pubmed_page.object_list %}
-    <tr>
-      <!-- 序号 -->
-      <td class="text-center align-middle">
-        {{ forloop.counter0|add:pubmed_page.start_index }}
-      </td>
+      <h3 class="h6 mb-2">Source Publication</h3>
+      <div>{{ p.title|default:"Untitled publication" }}</div>
+      <div class="small text-muted mt-1">
+        {% if p.section %}Section: {{ p.section }}{% endif %}
+        {% if p.confidence %}<span class="ms-2">Confidence: {{ p.confidence }}</span>{% endif %}
+      </div>
+      <div class="mt-2">
+        {% if p.pmid %}<a class="btn btn-sm btn-outline-primary me-2" href="https://pubmed.ncbi.nlm.nih.gov/{{ p.pmid|urlencode }}/" target="_blank" rel="noopener">PubMed</a>{% endif %}
+        {% if p.doi %}<a class="btn btn-sm btn-outline-secondary" href="https://doi.org/{{ p.doi|urlencode }}" target="_blank" rel="noopener">DOI</a>{% endif %}
+      </div>
+    </div>
+  </article>
+  {% empty %}
+    {% if not publication_error %}<p class="text-center text-muted">No related evidence found</p>{% endif %}
+  {% endfor %}
+</section>
 
-      <!-- 标题 -->
-      <td style="line-height:1.4; word-break: break-word;">
-        {{ p.title }}
-        <br>
-        <small class="text-muted">{{ p.journal }}</small>
-      </td>
-
-      <!-- 按钮（⚠️ 已压缩） -->
-      <td class="text-center align-middle">
-        <a href="https://pubmed.ncbi.nlm.nih.gov/{{ p.pmid }}/"
-           target="_blank"
-           class="btn btn-sm btn-outline-primary px-2 py-1">
-           🔗PubMed
-        </a>
-      </td>
-    </tr>
-    {% empty %}
-      <tr>
-        <td colspan="3" class="text-center text-muted">
-          No publications found
-        </td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-{% include "web/includes/pagination_controls.html" with page_obj=pubmed_page page_param="pubmed_page" anchor_id="publications" show_info=True %}
+{% include "web/includes/pagination_controls.html" with page_obj=publication_page page_param="pubmed_page" anchor_id="publications" show_info=True %}
 
 
 <hr>

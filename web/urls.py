@@ -1,5 +1,5 @@
 from django.urls import path, re_path
-from . import views, views_plants
+from . import views, views_plants, knowledge_views, agent_views
 
 urlpatterns = [
     path('compound/list/', views.compound_list, name='compound_list'),
@@ -14,6 +14,11 @@ urlpatterns = [
 
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
+    path('knowledge/', knowledge_views.knowledge_search, name='knowledge_search'),
+    path('expert-qa/', agent_views.expert_qa, name='expert_qa'),
+    path('expert-qa/api/health', agent_views.agent_health, name='expert_qa_health'),
+    path('expert-qa/api/models', agent_views.agent_models, name='expert_qa_models'),
+    path('expert-qa/api/chat/stream', agent_views.agent_chat_stream, name='expert_qa_chat_stream'),
 
     re_path(r"^plant/(?P<latin_name>[^/]+)/(?P<compound_id>[^/]+)/$",
             views_plants.plant_compound_detail, name="plant_compound_detail"),
