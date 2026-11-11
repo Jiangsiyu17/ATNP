@@ -79,6 +79,9 @@ $(function () {
         processing: true,
         stateSave: true,
         stateDuration: -1,
+        scrollY: 'calc(100vh - 330px)',
+        scrollCollapse: false,
+        paging: true,
         ajax: "{% url 'compound_list_api' %}",
         pageLength: 20,
         orderCellsTop: true,
@@ -177,6 +180,25 @@ $(function () {
 </script>
 
 <style>
+/* Keep the controls and pagination visible while only the data rows scroll. */
+.dataTables_scrollBody {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.dataTables_scrollHead {
+    overflow: hidden !important;
+}
+
+.dataTables_scrollHead thead th {
+    background-color: #fff;
+}
+
+.dataTables_wrapper > .row:last-child {
+    background-color: #fff;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
 /* 字体 */
 #compoundTable tbody td {
     font-size: 14px;

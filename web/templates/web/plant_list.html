@@ -59,6 +59,9 @@ $(function () {
     const table = $('#plantTable').DataTable({
         serverSide: true,
         processing: true,
+        scrollY: 'calc(100vh - 330px)',
+        scrollCollapse: false,
+        paging: true,
 
         searching: true,    // ✅ 必须开启
         dom: 'lrtip',       // ✅ 隐藏默认搜索框
@@ -106,5 +109,25 @@ $(function () {
 
 });
 </script>
+<style>
+/* Keep the controls and pagination visible while only the data rows scroll. */
+.dataTables_scrollBody {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.dataTables_scrollHead {
+    overflow: hidden !important;
+}
+
+.dataTables_scrollHead thead th {
+    background-color: #fff;
+}
+
+.dataTables_wrapper > .row:last-child {
+    background-color: #fff;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+</style>
 <hr>
 {% endblock %}
