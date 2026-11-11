@@ -19,6 +19,7 @@ urlpatterns = [
     path('expert-qa/api/health', agent_views.agent_health, name='expert_qa_health'),
     path('expert-qa/api/models', agent_views.agent_models, name='expert_qa_models'),
     path('expert-qa/api/chat/stream', agent_views.agent_chat_stream, name='expert_qa_chat_stream'),
+    path('expert-qa/api/chat/<str:request_id>/cancel', agent_views.agent_chat_cancel, name='expert_qa_chat_cancel'),
 
     re_path(r"^plant/(?P<latin_name>[^/]+)/(?P<compound_id>[^/]+)/$",
             views_plants.plant_compound_detail, name="plant_compound_detail"),

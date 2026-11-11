@@ -30,7 +30,7 @@
       <div id="qa-conversation" hidden>
         <div id="qa-history-turns"></div>
         <div class="qa-question"><small>你的问题</small><p id="qa-question"></p></div>
-        <div id="qa-progress" class="qa-progress" hidden><div class="qa-spinner"></div><span id="qa-progress-text">正在检索知识库…</span></div>
+        <div id="qa-progress" class="qa-progress" hidden><div class="qa-progress-head"><div class="qa-spinner"></div><span id="qa-progress-text">正在检索知识库…</span></div><div id="qa-progress-list" class="qa-progress-list" aria-live="polite"></div></div>
         <article id="qa-answer" class="qa-answer" hidden><header><span class="qa-avatar">A</span><div><b>ATNP Expert</b><small id="qa-meta"></small></div><button id="qa-copy" type="button">复制</button></header><div id="qa-notice" class="qa-notice" hidden></div><div id="qa-answer-body" class="qa-answer-body"></div><details id="qa-references"><summary>参考文献 <span id="qa-reference-count">0</span> 篇</summary><div id="qa-reference-list"></div></details></article>
         <div id="qa-error" class="qa-error" hidden><b>无法完成回答</b><p id="qa-error-text"></p><button id="qa-retry" type="button">重新尝试</button></div>
       </div>
@@ -40,4 +40,4 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/expert-qa.js' %}"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/atnp-sse-client.js' %}"></script><script src="{% static 'js/expert-qa.js' %}"></script>{% endblock %}

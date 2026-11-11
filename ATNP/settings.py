@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,12 +21,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-l$oemx+$984#7@=473vx$i@dhgd4usf!+59q%8&fe!wy+h%_dr'
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "True").strip().lower() == "true"
 
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1','192.168.10.99']
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get(
+        "DJANGO_ALLOWED_HOSTS",
+        "0.0.0.0,localhost,127.0.0.1,192.168.10.99",
+    ).split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -77,11 +85,11 @@ WSGI_APPLICATION = 'ATNP.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',   # 使用 MySQL
-        'NAME': 'mgf_library',                     # 数据库名
-        'USER': 'root',                         # 数据库用户名
-        'PASSWORD': 'root124',                  # 密码
-        'HOST': '192.168.10.99',                    # 数据库地址，或远程 IP
-        'PORT': '3306',                         # 端口，MySQL 默认 3306
+        'NAME': os.environ.get('DB_NAME', 'mgf_library'),
+        'USER': os.environ['DB_USER'],
+        'PASSWORD': os.environ['DB_PASSWORD'],
+        'HOST': os.environ.get('DB_HOST', '192.168.10.99'),
+        'PORT': os.environ.get('DB_PORT', '3306'),
     }
 }
 

@@ -71,3 +71,23 @@ def agent_chat_stream(request):
         return response
     except (requests.RequestException, ValueError, UnicodeDecodeError) as exc:
         return _upstream_error(exc)
+
+
+@csrf_exempt
+def agent_chat_cancel(request, request_id):
+    if request.method != "POST":
+        return JsonResponse({"detail": "Only POST is supported."}, status=405)
+    try:
+        token = request.headers.get("X-Cancel-Token", "")
+        response = requests.post(
+            _agent_url(f"chat/{request_id}/cancel"),
+            headers={"X-Cancel-Token": token},
+            timeout=8,
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"detail": response.text or "取消请求失败"}
+        return JsonResponse(data, status=response.status_code)
+    except requests.RequestException as exc:
+        return _upstream_error(exc)
