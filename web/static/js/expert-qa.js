@@ -10,11 +10,18 @@
     send: $("qa-send"), model: $("qa-model"), modelNote: $("qa-model-note"), history: $("qa-history"), empty: $("qa-empty"),
     dot: $("qa-status-dot"), status: $("qa-status")
   };
+  // This page is intentionally stateless: no question or answer is persisted
+  // in localStorage, and a refresh starts a new one-shot conversation.
   const KEY = "atnp.database.expertQa.v1";
   let conversations = load(), active = null, controller = null, requestMeta = null, progressEvents = [], lastQuestion = "", answerText = "";
 
-  function load() { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (_) { return []; } }
-  function save() { localStorage.setItem(KEY, JSON.stringify(conversations.slice(0, 12))); }
+  function load() {
+    // Remove data written by older versions of this page once, then never
+    // read or write browser history again.
+    try { localStorage.removeItem(KEY); } catch (_) {}
+    return [];
+  }
+  function save() { /* intentionally disabled: this is a one-shot chat */ }
   function id() { return `conv_${Date.now()}_${Math.random().toString(16).slice(2)}`; }
   function esc(value) { const d = document.createElement("div"); d.textContent = value || ""; return d.innerHTML; }
   function renderHistory() {
@@ -61,7 +68,11 @@
     els.progress.classList.add("completed"); els.progressText.textContent = "检索与生成完成"; renderProgress();
   }
   function showResult(question, result) {
-    completeProgress(result); els.progress.hidden = false; els.answer.hidden = false; els.error.hidden = true; answerText = result.answer || result.message || "";
+    completeProgress(result);
+    // The progress panel is transient UI only. Do not leave
+    // "正在检索知识库" visible after the final answer arrives.
+    els.progress.hidden = true;
+    els.answer.hidden = false; els.error.hidden = true; answerText = result.answer || result.message || "";
     els.body.replaceChildren(); els.body.append(renderText(answerText)); renderReferences(Array.isArray(result.references) ? result.references : []);
     els.meta.textContent = [result.compound, result.references?.length ? `${result.references.length} 篇文献` : "", Number.isFinite(result.elapsed_ms) ? `${(result.elapsed_ms / 1000).toFixed(1)} 秒` : ""].filter(Boolean).join(" · ");
     const notice = result.message || (result.status === "needs_clarification" ? "请补充明确的天然产物名称。" : ""); els.notice.textContent = notice; els.notice.hidden = !notice;
@@ -70,7 +81,10 @@
   function open(cid) { const c = conversations.find((x) => x.id === cid); if (!c) return; active = cid; const turn = c.turns.at(-1); els.turns.replaceChildren(); c.turns.slice(0, -1).forEach((t) => { const p = document.createElement("p"); p.className = "qa-question"; p.innerHTML = `<small>你的问题</small><br>${esc(t.question)}`; els.turns.append(p); }); if (turn) showResult(turn.question, turn.result); renderHistory(); }
   function sse(response, onEvent) { const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; return (async () => { while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value || new Uint8Array(), { stream: !done }); const blocks = buffer.split("\n\n"); buffer = blocks.pop() || ""; blocks.forEach((block) => { let event = "message", data = ""; block.split("\n").forEach((line) => { if (line.startsWith("event:")) event = line.slice(6).trim(); if (line.startsWith("data:")) data += line.slice(5).trim(); }); if (data) { try { onEvent(event, JSON.parse(data)); } catch (_) {} } }); if (done) break; } })(); }
   async function ask(question) {
-    question = question.trim(); if (!question || controller) return; lastQuestion = question; if (!active) { active = id(); conversations.unshift({ id: active, title: question, turns: [] }); }
+    question = question.trim(); if (!question || controller) return; lastQuestion = question;
+    // A request id is still sent to the backend so cancellation and tracing
+    // work, but it is not used to restore a client-side conversation.
+    active = id();
     els.welcome.hidden = true; els.conversation.hidden = false; els.question.textContent = question; els.answer.hidden = true; els.error.hidden = true; els.progress.hidden = false; els.progress.classList.remove("completed"); progressEvents = []; renderProgress(); els.progressText.textContent = "正在连接问答服务…"; els.input.value = ""; els.input.style.height = "auto"; els.send.disabled = true; controller = new AbortController();
     try {
       const result = await window.atnpSseClient.ask({
@@ -78,12 +92,12 @@
         onMeta: (meta) => { requestMeta = meta; },
         onProgress: (progress) => { updateProgress(progress); }
       });
-      conversations.find((c) => c.id === active).turns.push({ question, result }); save(); showResult(question, result); renderHistory();
+      showResult(question, result);
     } catch (error) { if (error.name !== "AbortError") { els.progress.hidden = true; els.error.hidden = false; els.errorText.textContent = error.message || "问答服务暂时不可用。"; } }
     finally { controller = null; requestMeta = null; els.send.disabled = false; }
   }
   async function loadModels() { try { const r = await fetch("/expert-qa/api/models"); const d = await r.json(); els.model.replaceChildren(...(d.items || []).map((m) => { const o = new Option(m.label || m.id, m.id); return o; })); els.model.disabled = false; els.modelNote.textContent = "回答由所选模型生成，并以 ATNP 文献证据为依据。"; } catch (_) { els.model.replaceChildren(new Option("使用默认模型", "")); } }
   async function health() { try { const r = await fetch("/expert-qa/api/health"); const d = await r.json(); els.dot.className = d.status === "ok" ? "ok" : ""; els.status.textContent = d.status === "ok" ? "问答服务正常" : "模型服务需要检查"; } catch (_) { els.status.textContent = "无法连接问答服务"; } }
-  els.form.onsubmit = async (e) => { e.preventDefault(); if (controller) { controller.abort(); if (requestMeta?.request_id && requestMeta?.cancel_token) { try { await window.atnpSseClient.cancel(requestMeta.request_id, requestMeta.cancel_token); } catch (_) {} } return; } ask(els.input.value); }; els.input.oninput = () => { els.input.style.height = "auto"; els.input.style.height = `${Math.min(els.input.scrollHeight, 130)}px`; }; els.input.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); els.form.requestSubmit(); } }; document.querySelectorAll("[data-question]").forEach((b) => b.onclick = () => ask(b.dataset.question)); $("qa-new").onclick = () => { active = null; els.welcome.hidden = false; els.conversation.hidden = true; renderHistory(); }; $("qa-clear").onclick = () => { conversations = []; save(); active = null; renderHistory(); }; $("qa-menu").onclick = () => els.shell.classList.toggle("qa-open"); $("qa-copy").onclick = () => navigator.clipboard?.writeText(answerText); els.retry.onclick = () => ask(lastQuestion);
+  els.form.onsubmit = async (e) => { e.preventDefault(); if (controller) { controller.abort(); if (requestMeta?.request_id && requestMeta?.cancel_token) { try { await window.atnpSseClient.cancel(requestMeta.request_id, requestMeta.cancel_token); } catch (_) {} } return; } ask(els.input.value); }; els.input.oninput = () => { els.input.style.height = "auto"; els.input.style.height = `${Math.min(els.input.scrollHeight, 130)}px`; }; els.input.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); els.form.requestSubmit(); } }; document.querySelectorAll("[data-question]").forEach((b) => b.onclick = () => ask(b.dataset.question)); $("qa-new").onclick = () => { active = null; els.welcome.hidden = false; els.conversation.hidden = true; els.turns.replaceChildren(); els.answer.hidden = true; els.error.hidden = true; renderHistory(); }; $("qa-clear").onclick = () => { conversations = []; active = null; els.turns.replaceChildren(); renderHistory(); }; $("qa-menu").onclick = () => els.shell.classList.toggle("qa-open"); $("qa-copy").onclick = () => navigator.clipboard?.writeText(answerText); els.retry.onclick = () => ask(lastQuestion);
   renderHistory(); loadModels(); health();
 })();

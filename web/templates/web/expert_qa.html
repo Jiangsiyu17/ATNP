@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block title %}Expert Q&amp;A · ATNP Database{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/expert-qa.css' %}?v=2">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/expert-qa.css' %}?v=3">{% endblock %}
 
 {% block content %}
 <div class="qa-shell" id="qa-shell">
@@ -40,4 +40,4 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/atnp-sse-client.js' %}"></script><script src="{% static 'js/expert-qa.js' %}"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/atnp-sse-client.js' %}?v=2"></script><script src="{% static 'js/expert-qa.js' %}?v=3"></script>{% endblock %}

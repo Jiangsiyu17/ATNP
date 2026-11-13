@@ -27,3 +27,6 @@ body:has(.qa-shell) > .container-fluid {
     overflow-y: auto !important;
     overscroll-behavior: contain;
 }
+/* One-shot mode: do not show or retain an in-page conversation history. */
+.qa-sidebar{display:none!important}
+.qa-shell .qa-main{width:100%;}
