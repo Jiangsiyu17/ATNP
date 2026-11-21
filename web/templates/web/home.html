@@ -15,6 +15,26 @@
     font-family: 'Roboto', sans-serif;
     font-size: 1.1rem;
   }
+  .about-panel {
+    background: linear-gradient(135deg, #eef5fb 0%, #e2ebf3 100%);
+    border: 1px solid #d5e2ed;
+    border-radius: 1rem;
+    box-shadow: 0 0.35rem 1rem rgba(35, 65, 90, 0.08);
+  }
+  .about-panel p { line-height: 1.65; }
+  .evidence-card {
+    height: 100%;
+    border: 0;
+    border-left: 4px solid var(--level-color);
+    border-radius: 0.65rem;
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: 0 0.2rem 0.7rem rgba(35, 65, 90, 0.06);
+  }
+  .evidence-card .level-badge {
+    color: #fff;
+    background: var(--level-color);
+    min-width: 2.25rem;
+  }
 </style>
 {% endblock %}
 
@@ -75,38 +95,64 @@
 <div class="my-5"></div>
 
 
-  <!-- 网站介绍（全宽浅灰） -->
-  <div class="container-fluid mt-3 py-3" style="background-color: rgb(226, 235, 243);">
-    <div class="row">
-      <div class="col-12">
-        <h5 class="text-center mb-3">About ATNP Database</h5>
-        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
-          The ATNP Database is a specialized resource focusing on 
-          <strong>plant-derived anticancer natural products</strong> 
-          and their related compounds. It integrates information on 
-          <strong>compounds, plants, and spectra</strong>, providing tools 
-          for <strong>search, browsing, and similarity comparison</strong>.  
-        </p>
-        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
-          Our goal is to support research in natural product chemistry, 
-          drug discovery, and the modernization of traditional medicine. 
-          By offering comprehensive data and intuitive tools, ATNP 
-          facilitates both academic studies and practical applications 
-          in pharmaceutical development.
-        </p>
-        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
-          The <strong>Compound List</strong> section presents all anticancer natural compounds stored in the database. 
-          In the compound detail page, three tables are provided: (1) <em>Compound Information</em>, which displays the compound’s general information including name, SMILES, database source, and structure; 
-          (2) <em>Plants Sources</em>, listing the potential plants containing this compound, with each plant detail page showing basic plant information and spectrum comparisons; 
-          and (3) <em>Similar Compounds in Plants</em>, presenting plants containing structurally or spectrally similar compounds, together with spectrum comparison details.
-        </p>
-        <p class="px-4" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.8rem;">
-          The <strong>Plants List</strong> section displays all plants that contain anticancer natural compounds. 
-          By clicking <em>View</em>, users can access the list of anticancer compounds identified in the selected plant.
-        </p>
+  <!-- Website introduction and evidence framework -->
+  <section class="container-fluid mt-3 mb-4 px-4 px-md-5 py-4 about-panel">
+    <h3 class="text-center mb-3">About the ATNP Database</h3>
+    <p class="mb-3">
+      ATNP is a curated resource for <strong>plant-derived anticancer natural products</strong>.
+      It integrates compound, plant, taxonomic, and MS/MS spectral information with tools for
+      searching, browsing, spectral comparison, and evidence-aware interpretation.
+    </p>
+    <p class="mb-4">
+      Plant–compound associations are supported by spectral-entropy similarity matching and
+      cross-referenced with published literature, NPBS records, and plant taxonomy. The
+      <strong>Evidence Level</strong> shown on compound–plant pages follows an exclusive priority:
+      <strong>A &gt; B &gt; C &gt; D</strong>. Each association is assigned to the highest applicable level.
+    </p>
+
+    <h5 class="text-center mb-3">Evidence Levels</h5>
+    <div class="row g-3 mb-4">
+      <div class="col-md-6 col-xl-3">
+        <div class="card evidence-card p-3" style="--level-color:#dc3545;">
+          <div class="d-flex align-items-center gap-2 mb-2"><span class="badge level-badge level-a">A</span><strong>Direct external support</strong></div>
+          <p class="small mb-0">The compound–plant species association has an exact species-level match in NPBS or published literature, regardless of analytical platform.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="card evidence-card p-3" style="--level-color:#f28e5c;">
+          <div class="d-flex align-items-center gap-2 mb-2"><span class="badge level-badge level-b">B</span><strong>Phylogenetic support</strong></div>
+          <p class="small mb-0">After excluding Level A, the association has NPBS/literature family- or genus-level support, or confirmed repeat support within the same platform.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="card evidence-card p-3" style="--level-color:#6fa8dc;">
+          <div class="d-flex align-items-center gap-2 mb-2"><span class="badge level-badge level-c">C</span><strong>Same-platform match</strong></div>
+          <p class="small mb-0">After excluding Levels A and B, the association is supported by spectral matching between plant samples and reference spectra acquired on the same analytical platform.</p>
+        </div>
+      </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="card evidence-card p-3" style="--level-color:#0d6efd;">
+          <div class="d-flex align-items-center gap-2 mb-2"><span class="badge level-badge level-d">D</span><strong>Residual associations</strong></div>
+          <p class="small mb-0">All remaining associations after Levels A, B, and C are assigned to Level D. This residual category keeps the four levels mutually exhaustive.</p>
+        </div>
       </div>
     </div>
-  </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="bg-white rounded-3 p-3 h-100">
+          <h6 class="fw-bold">Compound pages</h6>
+          <p class="small mb-0">Review compound structures, database sources, plant sources, Evidence Levels, and structurally or spectrally similar compounds.</p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="bg-white rounded-3 p-3 h-100">
+          <h6 class="fw-bold">Plant pages</h6>
+          <p class="small mb-0">Browse anticancer compounds associated with each plant and inspect the corresponding spectrum comparisons and evidence annotations.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
 <hr>
 {% endblock %}

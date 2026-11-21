@@ -12,6 +12,7 @@ model/
 model_copy/
 sample_mgf/
 standard_mgf/
+level_data/
 
 # 数据库
 db.sqlite3

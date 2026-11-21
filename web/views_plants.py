@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from .models import CompoundLibrary
 from .utils.plot_tools import plot_single_spectrum
 from .utils.plotting import format_latin_name, plot_2_spectrum
+from .utils.level_evidence import get_pair_level
 
 
 def plant_list(request):
@@ -279,6 +280,7 @@ def plant_compound_detail(request, latin_name, compound_id):
         "latin_name": format_latin_name(sample_obj.latin_name or "-"),
         "tissue": sample_obj.tissue or "-",
         "score": sample_obj.score or 0,
+        "level": get_pair_level(compound_obj.inchikey, sample_obj.latin_name),
         "image": image,
     }
     return render(request, "web/plant_compound_detail.html", {

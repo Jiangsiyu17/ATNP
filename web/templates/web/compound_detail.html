@@ -144,11 +144,11 @@
 <!-- ================= Plant Sources ================= -->
 <table id="plant-sources" class="table w-100 table-bordered table-hover mb-4">
   <thead class="table-info">
-    <tr><th class="text-center fs-5 py-2" colspan="7">Plant Sources</th></tr>
+    <tr><th class="text-center fs-5 py-2" colspan="8">Plant Sources</th></tr>
   </thead>
   <tr class="table-secondary fw-bold">
     <th>#</th><th>Chinese Name</th><th>Latin Name</th>
-    <th>Tissue</th><th>Precursor m/z</th><th>Ion mode</th><th></th>
+    <th>Tissue</th><th>Precursor m/z</th><th>Ion mode</th><th>Level</th><th></th>
   </tr>
   <tbody>
     {% for ps in plant_sources.object_list %}
@@ -159,13 +159,14 @@
       <td>{{ ps.tissue }}</td>
       <td>{{ ps.precursor_mz|floatformat:4 }}</td>
       <td>{{ ps.ionmode }}</td>
+      <td><span class="badge level-badge level-{{ ps.level|lower }}">{{ ps.level }}</span></td>
       <td>
         <a href="{% url 'plant_compound_detail' latin_name=ps.latin_slug compound_id=compound.id %}?pid={{ ps.pid }}"
            class="btn btn-sm btn-outline-primary">View</a>
       </td>
     </tr>
     {% empty %}
-      <tr><td colspan="7" class="text-muted">No plant recorded.</td></tr>
+      <tr><td colspan="8" class="text-muted">No plant recorded.</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -57,6 +57,11 @@
         </tr>
 
         <tr>
+          <th>Evidence Level</th>
+          <td><span class="badge level-badge level-{{ entry.level|lower }}">{{ entry.level }}</span></td>
+        </tr>
+
+        <tr>
           <th>Spectrum comparison</th>
           <td>
             {% if entry.image %}

@@ -5,6 +5,7 @@ from django.db.models.functions import Lower
 from django.db.models import Q 
 from django.core.paginator import Paginator
 from web.utils.plotting import plot_ref_mol, generate_spectrum_comparison, format_latin_name
+from web.utils.level_evidence import get_pair_level
 import re
 import itertools
 from urllib.parse import unquote
@@ -397,7 +398,8 @@ def compound_detail(request, pk):
                 "matched_id": s.matched_spectrum_id,
                 "latin_slug": slugify(raw_latin) if raw_latin else "unknown-plant",
                 "precursor_mz": parse_precursor_mz(s.precursor_mz, s.pepmass),
-                "ionmode": s.ionmode or "-"
+                "ionmode": s.ionmode or "-",
+                "level": get_pair_level(compound.inchikey, raw_latin),
             })
     uniq={}
 
