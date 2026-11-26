@@ -31,3 +31,14 @@ __pycache__/
 *.pyc
 
 crawler/
+
+# Expert Q&A runtime files and secrets
+.env
+*.env
+!*.env.example
+services/expert_qa/data/*.duckdb
+services/expert_qa/data/*.sqlite
+services/expert_qa/logs/
+!services/expert_qa/requirements.txt
+!services/expert_qa/requirements-dev.txt
+!services/expert_qa/requirements-reranker.txt
