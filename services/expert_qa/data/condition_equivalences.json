@@ -1,0 +1,11 @@
+{
+  "description": "Explicit concept equivalences, separate from subtype relations. Model-proposed translations alone cannot add entries.",
+  "groups": [
+    {
+      "canonical_name": "gastric cancer",
+      "names": ["gastric cancer", "stomach cancer", "胃癌"],
+      "types": ["Cancer", "Disease"],
+      "provenance": "curated disease-name equivalence"
+    }
+  ]
+}

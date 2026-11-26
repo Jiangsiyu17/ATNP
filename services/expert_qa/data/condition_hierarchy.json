@@ -1,0 +1,12 @@
+{
+  "description": "Explicit search scope, not synonym equivalence. Expand only when requested; children must resolve in ATNP. This is a partial hierarchy, not a complete cancer ontology.",
+  "relations": [
+    {"parent": "lung cancer", "child": "non-small cell lung cancer", "provenance": "curated ATNP search scope"},
+    {"parent": "lung cancer", "child": "small cell lung cancer", "provenance": "curated ATNP search scope"},
+    {"parent": "lung cancer", "child": "lung adenocarcinoma", "provenance": "curated ATNP search scope"},
+    {"parent": "gastric cancer", "child": "gastric carcinoma", "provenance": "curated ATNP search scope"},
+    {"parent": "gastric cancer", "child": "gastric adenocarcinoma", "provenance": "curated ATNP search scope"},
+    {"parent": "ovarian cancer", "child": "ovarian carcinoma", "provenance": "curated ATNP search scope"},
+    {"parent": "ovarian cancer", "child": "ovarian adenocarcinoma", "provenance": "curated ATNP search scope"}
+  ]
+}
